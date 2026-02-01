@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Send, X, User, Smile, Minus, Search } from 'lucide-react';
+import { MessageCircle, Send, X, User, Smile, Minus, Search, Loader2 } from 'lucide-react';
 import { Message, User as UserType, ThemeColor } from '../types';
 import { THEME_COLORS, MOCK_USERS } from '../constants';
 
@@ -12,6 +12,7 @@ interface ChatPopupProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   unreadCount: number;
+  isTyping?: boolean;
 }
 
 const ChatPopup: React.FC<ChatPopupProps> = ({ 
@@ -21,7 +22,8 @@ const ChatPopup: React.FC<ChatPopupProps> = ({
   onSendMessage, 
   isOpen, 
   setIsOpen,
-  unreadCount 
+  unreadCount,
+  isTyping = false
 }) => {
   const [inputText, setInputText] = useState('');
   const colorSet = THEME_COLORS[primaryColor];
@@ -31,7 +33,7 @@ const ChatPopup: React.FC<ChatPopupProps> = ({
     if (isOpen) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isTyping]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +77,7 @@ const ChatPopup: React.FC<ChatPopupProps> = ({
               const sender = MOCK_USERS.find(u => u.id === msg.senderId);
               
               return (
-                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-2 group`}>
+                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} gap-2 group animate-slide`}>
                   {!isMe && (
                     <img src={sender?.avatar} className="w-6 h-6 rounded-full self-end mb-1" alt="" />
                   )}
@@ -93,6 +95,20 @@ const ChatPopup: React.FC<ChatPopupProps> = ({
                 </div>
               );
             })}
+            
+            {isTyping && (
+              <div className="flex justify-start gap-2 animate-pulse">
+                <div className="w-6 h-6 rounded-full bg-gray-200 self-end mb-1"></div>
+                <div className="bg-white border border-gray-100 p-3 rounded-2xl rounded-bl-none shadow-sm">
+                  <div className="flex gap-1.5 items-center">
+                    <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce"></div>
+                    <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                    <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce [animation-delay:-0.5s]"></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
             <div ref={chatEndRef} />
           </div>
 

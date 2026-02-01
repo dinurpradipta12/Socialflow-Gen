@@ -1,23 +1,26 @@
 
-import React, { useState } from 'react';
-import { ContentPlanItem, PostInsight } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ContentPlanItem, PostInsight, User } from '../types';
 import { MOCK_CONTENT_PLANS, MOCK_USERS } from '../constants';
 import { scrapePostInsights } from '../services/geminiService';
-import { Plus, ChevronDown, ChevronUp, FileText, Link as LinkIcon, ExternalLink, X, Save, Settings, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, FileText, Link as LinkIcon, ExternalLink, X, Save, Settings, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock } from 'lucide-react';
 
 interface ContentPlanProps {
   primaryColorHex: string;
   onSaveInsight: (insight: PostInsight) => void;
+  users: User[];
 }
 
 const INITIAL_STATUS_OPTIONS: ContentPlanItem['status'][] = ['Drafting', 'Dijadwalkan', 'Diposting', 'Revisi', 'Reschedule', 'Dibatalkan'];
 
-const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight }) => {
+const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight, users }) => {
   const [items, setItems] = useState<ContentPlanItem[]>(MOCK_CONTENT_PLANS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [filterApprovedBy, setFilterApprovedBy] = useState<string>('All');
+  const [lastAutoSave, setLastAutoSave] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<{
     title: string;
@@ -34,6 +37,20 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting'
   });
 
+  // Auto-save feature: every 30 seconds if modal is open
+  useEffect(() => {
+    let interval: any;
+    if (isModalOpen) {
+      interval = setInterval(() => {
+        if (formData.title.trim()) {
+          console.log("Auto-saving draft...", formData);
+          setLastAutoSave(new Date().toLocaleTimeString());
+        }
+      }, 30000);
+    }
+    return () => clearInterval(interval);
+  }, [isModalOpen, formData]);
+
   const openEditModal = (item: ContentPlanItem) => {
     setEditingItem(item);
     setFormData({
@@ -41,6 +58,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       description: item.description, postLink: item.postLink, approvedBy: item.approvedBy || '',
       scriptUrl: item.scriptUrl || '', visualUrl: item.visualUrl || '', status: item.status
     });
+    setLastAutoSave(null);
     setIsModalOpen(true);
   };
 
@@ -56,6 +74,11 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     setEditingItem(null);
     setFormData({ title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting' });
   };
+
+  const filteredItems = items.filter(item => {
+    if (filterApprovedBy === 'All') return true;
+    return item.approvedBy === filterApprovedBy;
+  });
 
   const handleAnalyzeLink = async (item: ContentPlanItem) => {
     if (!item.postLink || item.postLink === '' || item.postLink === '#') {
@@ -82,9 +105,24 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Konten Plan</h1>
           <p className="text-gray-400 font-medium">Strategi & Manajemen Konten Snaillabs.</p>
         </div>
-        <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="px-6 py-3 bg-blue-100 text-blue-500 rounded-2xl font-bold shadow-sm active:scale-95 flex items-center gap-2 transition-all hover:bg-blue-200">
-           <Plus size={20} /> Tambah Plan
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 bg-white border border-gray-100 rounded-2xl px-4 py-2.5 shadow-sm focus-within:ring-2 focus-within:ring-blue-100">
+            <Filter size={16} className="text-gray-400" />
+            <select 
+              value={filterApprovedBy} 
+              onChange={e => setFilterApprovedBy(e.target.value)}
+              className="bg-transparent outline-none text-[10px] font-black uppercase tracking-widest text-gray-600"
+            >
+              <option value="All">All Approvers</option>
+              {Array.from(new Set(items.map(i => i.approvedBy).filter(Boolean))).map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={() => { setEditingItem(null); setFormData({title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting'}); setLastAutoSave(null); setIsModalOpen(true); }} className="px-6 py-3 bg-blue-100 text-blue-500 rounded-2xl font-bold shadow-sm active:scale-95 flex items-center gap-2 transition-all hover:bg-blue-200">
+             <Plus size={20} /> Tambah Plan
+          </button>
+        </div>
       </div>
 
       {isModalOpen && (
@@ -96,7 +134,14 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                     <h2 className="text-2xl font-black">{editingItem ? 'Edit Perencanaan' : 'Perencanaan Baru'}</h2>
                     <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Snaillabs Creative Studio</p>
                  </div>
-                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-blue-100/50 rounded-xl transition-all"><X size={24} /></button>
+                 <div className="flex items-center gap-4">
+                    {lastAutoSave && (
+                      <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-blue-400 bg-white px-3 py-1.5 rounded-xl shadow-sm">
+                        <Clock size={10} /> Draft saved at {lastAutoSave}
+                      </div>
+                    )}
+                    <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-blue-100/50 rounded-xl transition-all"><X size={24} /></button>
+                 </div>
               </div>
               <form onSubmit={handleSave} className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1 bg-white">
                  <div className="grid grid-cols-2 gap-6">
@@ -111,7 +156,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        </select>
                     </div>
                  </div>
-
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Konten Pilar</label>
@@ -122,7 +166,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        <input value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100" placeholder="Reels, Carousel, dll" />
                     </div>
                  </div>
-
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1 flex items-center gap-2"><FileText size={12}/> Script URL</label>
@@ -132,11 +175,10 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1 flex items-center gap-2"><UserPlus size={12}/> Approved By</label>
                        <select value={formData.approvedBy} onChange={e => setFormData({...formData, approvedBy: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100">
                           <option value="">Pilih Approval</option>
-                          {MOCK_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+                          {users.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                        </select>
                     </div>
                  </div>
-
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1 flex items-center gap-2"><ImageIcon size={12}/> Visual URL / Asset</label>
@@ -147,12 +189,10 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        <input value={formData.postLink} onChange={e => setFormData({...formData, postLink: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100" placeholder="https://instagram.com/p/..." />
                     </div>
                  </div>
-
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Brief Visual / Deskripsi</label>
                     <textarea rows={4} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100" placeholder="Tulis instruksi editing atau brief visual di sini..." />
                  </div>
-
                  <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2">
                     <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-gray-100 text-gray-400 font-black uppercase text-[10px] tracking-widest rounded-2xl active:scale-95 transition-all">Batal</button>
                     <button type="submit" className="flex-[2] py-5 bg-blue-100 text-blue-500 font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-sm active:scale-95 transition-all hover:bg-blue-200">Simpan Perencanaan</button>
@@ -172,7 +212,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-               {items.map(item => (
+               {filteredItems.map(item => (
                   <React.Fragment key={item.id}>
                      <tr className="hover:bg-gray-50 transition-all cursor-pointer" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
                         <td className="px-8 py-6">
@@ -207,17 +247,10 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                                     </div>
                                  </div>
                                  <div className="flex flex-col gap-3 min-w-[240px]">
-                                    <button 
-                                       onClick={() => openEditModal(item)}
-                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-gray-50 text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all hover:bg-gray-100"
-                                    >
+                                    <button onClick={() => openEditModal(item)} className="w-full flex items-center justify-center gap-3 py-3.5 bg-gray-50 text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all hover:bg-gray-100">
                                        <Edit2 size={16}/> Edit Perencanaan
                                     </button>
-                                    <button 
-                                       onClick={() => handleAnalyzeLink(item)}
-                                       disabled={isAnalyzing}
-                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-50 text-blue-500 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-blue-100 active:scale-95 transition-all"
-                                    >
+                                    <button onClick={() => handleAnalyzeLink(item)} disabled={isAnalyzing} className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-50 text-blue-500 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-blue-100 active:scale-95 transition-all">
                                        {isAnalyzing ? <Loader2 size={16} className="animate-spin"/> : <BarChart2 size={16}/>}
                                        Analyze Tracker
                                     </button>
