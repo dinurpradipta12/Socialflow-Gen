@@ -18,7 +18,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null); // Track specific item analysis
   const [filterApprovedBy, setFilterApprovedBy] = useState<string>('All');
   const [lastAutoSave, setLastAutoSave] = useState<string | null>(null);
 
@@ -37,13 +37,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting'
   });
 
-  // Auto-save logic: Triggered every 30 seconds if form has content and is open
+  // Auto-save logic
   useEffect(() => {
     let intervalId: any;
     if (isModalOpen) {
       intervalId = setInterval(() => {
         if (formData.title.trim().length > 0) {
-          // In a real app, this would hit an API
           console.log("Draft auto-saved:", formData.title);
           setLastAutoSave(new Date().toLocaleTimeString('id-ID'));
         }
@@ -76,12 +75,13 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     setFormData({ title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting' });
   };
 
-  const handleAnalyzeLink = async (item: ContentPlanItem) => {
+  const handleAnalyzeLink = async (e: React.MouseEvent, item: ContentPlanItem) => {
+    e.stopPropagation(); // Prevent row expand when clicking analyze
     if (!item.postLink || item.postLink === '' || item.postLink === '#') {
       alert("Masukkan link postingan yang valid terlebih dahulu.");
       return;
     }
-    setIsAnalyzing(true);
+    setAnalyzingId(item.id);
     try {
       const insight = await scrapePostInsights(item.postLink);
       onSaveInsight({ ...insight, sourceType: 'plan' });
@@ -90,7 +90,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       console.error(err);
       alert("Gagal melakukan scrapping. Pastikan link dapat diakses publik.");
     } finally {
-      setIsAnalyzing(false);
+      setAnalyzingId(null);
     }
   };
 
@@ -220,15 +220,31 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
             <tbody className="divide-y divide-gray-50">
                {filteredItems.map(item => (
                   <React.Fragment key={item.id}>
-                     <tr className="hover:bg-gray-50 transition-all cursor-pointer" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                     <tr className="hover:bg-gray-50 transition-all cursor-pointer group" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
                         <td className="px-8 py-6">
                            <span className={`px-3 py-1 text-[10px] font-black rounded-lg uppercase tracking-widest border ${
                              item.status === 'Diposting' ? 'bg-emerald-50 text-emerald-400 border-emerald-100' : 'bg-blue-50 text-blue-400 border-blue-100'
                            }`}>{item.status}</span>
                         </td>
                         <td className="px-8 py-6 text-sm font-bold text-gray-900">{item.title}</td>
-                        <td className="px-8 py-6 text-center">
-                           <div className="p-2 text-gray-200 group-hover:text-gray-900 transition-all">{expandedId === item.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
+                        <td className="px-8 py-6">
+                           <div className="flex items-center justify-center gap-4">
+                              {/* New Quick Analyze Button */}
+                              {item.postLink && item.postLink !== '#' && (
+                                 <button 
+                                    onClick={(e) => handleAnalyzeLink(e, item)}
+                                    className={`p-2 rounded-xl transition-all shadow-sm ${
+                                       analyzingId === item.id 
+                                       ? 'bg-blue-100 text-blue-600 animate-pulse' 
+                                       : 'bg-blue-50 text-blue-400 hover:bg-blue-100 hover:scale-110 active:scale-95'
+                                    }`}
+                                    title="AI Analyze Tracker"
+                                 >
+                                    {analyzingId === item.id ? <Loader2 size={16} className="animate-spin" /> : <BarChart2 size={16} />}
+                                 </button>
+                              )}
+                              <div className="p-2 text-gray-200 group-hover:text-gray-900 transition-all">{expandedId === item.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
+                           </div>
                         </td>
                      </tr>
                      {expandedId === item.id && (
@@ -260,11 +276,11 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                                        <Edit2 size={16}/> Edit Perencanaan
                                     </button>
                                     <button 
-                                       onClick={() => handleAnalyzeLink(item)}
-                                       disabled={isAnalyzing}
+                                       onClick={(e) => handleAnalyzeLink(e, item)}
+                                       disabled={analyzingId !== null}
                                        className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-50 text-blue-500 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-blue-100 active:scale-95 transition-all"
                                     >
-                                       {isAnalyzing ? <Loader2 size={16} className="animate-spin"/> : <BarChart2 size={16}/>}
+                                       {analyzingId === item.id ? <Loader2 size={16} className="animate-spin"/> : <BarChart2 size={16}/>}
                                        Analyze Tracker
                                     </button>
                                  </div>
