@@ -12,7 +12,6 @@ interface SidebarProps {
   onLogout: () => void;
   user: User;
   appLogo?: string | null;
-  darkMode?: boolean;
 }
 
 const navItems = [
@@ -26,7 +25,7 @@ const navItems = [
   { id: 'settings', label: 'Pengaturan', icon: Settings },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColorHex, onLogout, user, appLogo, darkMode }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColorHex, onLogout, user, appLogo }) => {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -46,11 +45,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
   const isDev = user.role === 'developer';
 
   return (
-    <div className={`w-72 h-screen border-r flex flex-col fixed left-0 top-0 z-50 overflow-hidden shadow-2xl transition-all duration-300 ${
-      darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'
-    }`}>
+    <div className="w-72 h-screen bg-white border-r border-gray-100 flex flex-col fixed left-0 top-0 z-50 overflow-hidden shadow-2xl transition-all duration-300">
       <div className="p-6 flex flex-col h-full">
-        {/* Logo Section - Hides SF text if logo exists */}
+        {/* Logo Section */}
         <div className="flex items-center gap-3 mb-6 min-h-[48px]">
           {appLogo ? (
             <img src={appLogo} alt="Workspace Logo" className="w-full h-12 object-contain" />
@@ -60,20 +57,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
                 SF
               </div>
               <div className="animate-slide">
-                <h1 className="font-black text-gray-900 dark:text-white text-sm leading-tight tracking-tight">Socialflow</h1>
-                <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-none mt-0.5">by Snaillabs.id</p>
+                <h1 className="font-black text-gray-900 text-sm leading-tight tracking-tight">Socialflow</h1>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-0.5">by Snaillabs.id</p>
               </div>
             </>
           )}
         </div>
 
         {/* Greeting Widget */}
-        <div className="mb-6 p-5 bg-gray-50/80 dark:bg-slate-800/50 rounded-3xl border border-gray-100 dark:border-slate-800 shadow-sm space-y-1">
-           <p className="text-xs font-black text-gray-900 dark:text-white">Hey {user.name ? user.name.split(' ')[0] : 'User'},</p>
-           <p className="text-[11px] font-bold text-gray-500 dark:text-slate-400 leading-tight">{getGreeting()}!</p>
-           <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-gray-100 dark:border-slate-800">
+        <div className="mb-6 p-5 bg-gray-50/80 rounded-3xl border border-gray-100 shadow-sm space-y-1">
+           <p className="text-xs font-black text-gray-900">Hey {user.name ? user.name.split(' ')[0] : 'User'},</p>
+           <p className="text-[11px] font-bold text-gray-500 leading-tight">{getGreeting()}!</p>
+           <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-gray-100">
               <div className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)] animate-pulse"></div>
-              <span className="text-[10px] font-black text-gray-900 dark:text-white uppercase tracking-tighter">
+              <span className="text-[10px] font-black text-gray-900 uppercase tracking-tighter">
                 {time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
               </span>
            </div>
@@ -92,13 +89,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
                 onClick={() => hasPermission && setActiveTab(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
                   isActive 
-                    ? `bg-blue-50 dark:bg-slate-800 text-[var(--primary-color)] font-bold shadow-sm` 
+                    ? `bg-blue-50 text-[var(--primary-color)] font-bold shadow-sm` 
                     : hasPermission 
-                      ? 'text-gray-400 dark:text-slate-500 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white' 
-                      : 'text-gray-200 dark:text-slate-800 cursor-not-allowed opacity-50'
+                      ? 'text-gray-400 hover:bg-gray-50 hover:text-gray-900' 
+                      : 'text-gray-200 cursor-not-allowed opacity-50'
                 }`}
               >
-                <Icon size={18} className={isActive ? 'text-[var(--primary-color)]' : 'group-hover:text-gray-900 dark:group-hover:text-white'} />
+                <Icon size={18} className={isActive ? 'text-[var(--primary-color)]' : 'group-hover:text-gray-900 transition-colors'} />
                 <span className="text-[11px] font-black uppercase tracking-widest">{item.label}</span>
                 {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)] ml-auto" />}
               </button>
@@ -108,8 +105,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
           {isDev && (
             <button
               onClick={() => setActiveTab('devPortal')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all mt-4 border border-blue-100 dark:border-slate-800 ${
-                activeTab === 'devPortal' ? 'bg-gray-900 text-white shadow-xl' : 'text-blue-600 bg-blue-50/30 dark:bg-slate-800/30 hover:bg-blue-50'
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all mt-4 border border-blue-100 ${
+                activeTab === 'devPortal' ? 'bg-gray-900 text-white shadow-xl' : 'text-blue-600 bg-blue-50/30 hover:bg-blue-50'
               }`}
             >
               <Database size={18} />
@@ -122,15 +119,15 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
         <div className="mt-auto pt-6 space-y-3">
           <button 
             onClick={() => setActiveTab('profile')}
-            className={`w-full flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 border border-transparent rounded-2xl text-left transition-all ${activeTab === 'profile' ? 'shadow-lg border-gray-100 dark:border-slate-700' : ''}`}
+            className={`w-full flex items-center gap-3 p-3 bg-gray-50 hover:bg-white border border-transparent rounded-2xl text-left transition-all ${activeTab === 'profile' ? 'shadow-lg border-gray-100' : ''}`}
           >
-            <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-white dark:border-slate-800 shadow-sm" alt="" />
+            <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt="" />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-black text-gray-900 dark:text-white truncate">{user.name}</p>
-              <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-widest font-black truncate">{user.role}</p>
+              <p className="text-xs font-black text-gray-900 truncate">{user.name}</p>
+              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black truncate">{user.role}</p>
             </div>
           </button>
-          <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3.5 text-gray-400 dark:text-slate-500 hover:text-rose-600 transition-all rounded-2xl hover:bg-rose-50 dark:hover:bg-rose-950/20">
+          <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3.5 text-gray-400 hover:text-rose-600 transition-all rounded-2xl hover:bg-rose-50 group">
             <LogOut size={18} />
             <span className="text-[10px] font-black uppercase tracking-widest">Keluar</span>
           </button>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ThemeColor, Workspace, User, Message, SystemNotification, PostInsight } from './types';
 import { MOCK_WORKSPACES, MOCK_USERS, THEME_COLORS, DEV_CREDENTIALS, MOCK_MESSAGES } from './constants';
@@ -22,11 +21,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   
-  // Theme state
+  // Customization state
   const [primaryColorHex, setPrimaryColorHex] = useState('#2563eb');
   const [accentColorHex, setAccentColorHex] = useState('#6366f1');
   const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
-  const [darkMode, setDarkMode] = useState(false);
   const [customLogo, setCustomLogo] = useState<string | null>(null);
 
   // Data Integration
@@ -44,16 +42,13 @@ const App: React.FC = () => {
   const [email, setEmail] = useState('dev@snaillabs.id');
   const [password, setPassword] = useState('dev_snaillabs_2025');
 
-  // Sync Global Styles & Theme
+  // Sync Ambience Colors
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-color', primaryColorHex);
     document.documentElement.style.setProperty('--accent-color', accentColorHex);
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [primaryColorHex, accentColorHex, darkMode]);
+    // Explicitly remove dark class if it ever exists
+    document.documentElement.classList.remove('dark');
+  }, [primaryColorHex, accentColorHex]);
 
   const handleSaveAnalytics = (insight: PostInsight) => {
     setAnalyticsData(prev => [
@@ -85,7 +80,7 @@ const App: React.FC = () => {
     setUser(null);
   };
 
-  // Safe check to prevent "Cannot read property of null" during login phase
+  // Guard for null user or non-authenticated state
   if (authState !== 'authenticated' || !user) {
     return (
       <div className="min-h-screen bg-[#fcfcfd] flex items-center justify-center p-6 overflow-hidden">
@@ -99,8 +94,8 @@ const App: React.FC = () => {
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-4">
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700" placeholder="Email" />
-              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700" placeholder="Password" />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 placeholder-gray-400" placeholder="Email" />
+              <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 placeholder-gray-400" placeholder="Password" />
             </div>
             <button type="submit" disabled={loading} className="w-full py-4 bg-[var(--primary-color)] text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-xl active:scale-95 transition-all">
               {loading ? <Loader2 size={22} className="animate-spin mx-auto" /> : 'Masuk Sekarang'}
@@ -115,12 +110,11 @@ const App: React.FC = () => {
   const fontSizeClass = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-lg' : 'text-sm';
 
   const renderContent = () => {
-    // Developer bypasses restriction to settings and dev portal
     if (activeTab === 'settings' && !isDev && user.role !== 'admin' && user.role !== 'superuser') {
       return (
-        <div className="min-h-[80vh] flex flex-col items-center justify-center p-10 bg-white dark:bg-slate-900 rounded-[3rem]">
-          <Shield size={64} className="text-gray-200 dark:text-slate-800 mb-6" />
-          <p className="text-sm font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Akses Terbatas</p>
+        <div className="min-h-[80vh] flex flex-col items-center justify-center p-10 bg-white rounded-[3rem]">
+          <Shield size={64} className="text-gray-200 mb-6" />
+          <p className="text-sm font-black text-gray-400 uppercase tracking-widest">Akses Terbatas</p>
         </div>
       );
     }
@@ -139,7 +133,6 @@ const App: React.FC = () => {
           primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex}
           accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex}
           fontSize={fontSize} setFontSize={setFontSize}
-          darkMode={darkMode} setDarkMode={setDarkMode}
           customLogo={customLogo} setCustomLogo={setCustomLogo}
         />
       );
@@ -149,28 +142,27 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen ${darkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-[#fcfcfd] text-gray-900'} ${fontSizeClass} transition-colors duration-500`}>
+    <div className={`min-h-screen bg-[#fcfcfd] text-gray-900 ${fontSizeClass} transition-colors duration-500`}>
       <Sidebar 
         activeTab={activeTab} setActiveTab={setActiveTab} 
         primaryColorHex={primaryColorHex} onLogout={handleLogout}
         user={user} appLogo={customLogo}
-        darkMode={darkMode}
       />
 
       <main className="ml-72 p-10 min-h-screen">
         <header className="flex justify-between items-center mb-12">
           <div className="flex items-center gap-4">
-            <button onClick={() => setShowSystemNotifs(!showSystemNotifs)} className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 shadow-sm relative active:scale-90">
-              <Bell size={20} className="text-gray-400 dark:text-slate-500" />
+            <button onClick={() => setShowSystemNotifs(!showSystemNotifs)} className="p-3.5 rounded-2xl bg-white border border-gray-100 shadow-sm relative active:scale-90 transition-all">
+              <Bell size={20} className="text-gray-400" />
               {systemNotifications.filter(n => !n.read).length > 0 && (
-                <div className="absolute top-2.5 right-2.5 w-3 h-3 bg-rose-500 rounded-full ring-4 ring-white dark:ring-slate-900"></div>
+                <div className="absolute top-2.5 right-2.5 w-3 h-3 bg-rose-500 rounded-full ring-4 ring-white"></div>
               )}
             </button>
             <div>
-              <h2 className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">{activeWorkspace.name}</h2>
+              <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{activeWorkspace.name}</h2>
               <div className="flex items-center gap-2 mt-1.5">
                  <div className="w-2 h-2 rounded-full bg-[var(--primary-color)] shadow-lg shadow-blue-200"></div>
-                 <p className="text-2xl font-black dark:text-white capitalize tracking-tight leading-none">
+                 <p className="text-2xl font-black capitalize tracking-tight leading-none text-gray-900">
                    {activeTab === 'devPortal' ? 'Developer Portal' : activeTab.replace(/([A-Z])/g, ' $1')}
                  </p>
               </div>
@@ -182,24 +174,24 @@ const App: React.FC = () => {
                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-1 leading-none">
                  <CheckCircle size={10} /> Active Member
                </p>
-               <p className="text-[10px] text-gray-400 dark:text-slate-500 font-black mt-1 uppercase tracking-widest">Exp: {user.subscriptionExpiry || '2025-12-31'}</p>
+               <p className="text-[10px] text-gray-400 font-black mt-1 uppercase tracking-widest">Exp: {user.subscriptionExpiry || '2025-12-31'}</p>
             </div>
           </div>
         </header>
 
         {showSystemNotifs && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-xl p-6">
+          <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/30 backdrop-blur-md p-6">
             <div className="absolute inset-0" onClick={() => setShowSystemNotifs(false)}></div>
-            <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden animate-slide">
-              <div className="p-8 border-b border-gray-50 dark:border-slate-800 flex justify-between items-center">
-                <h3 className="text-xl font-black dark:text-white">Notifikasi</h3>
-                <button onClick={() => setShowSystemNotifs(false)} className="p-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl"><X size={20}/></button>
+            <div className="relative w-full max-w-md bg-white rounded-[3rem] shadow-2xl border border-gray-100 overflow-hidden animate-slide">
+              <div className="p-8 border-b border-gray-50 flex justify-between items-center">
+                <h3 className="text-xl font-black text-gray-900">Notifikasi</h3>
+                <button onClick={() => setShowSystemNotifs(false)} className="p-2 hover:bg-gray-50 rounded-xl transition-all"><X size={20}/></button>
               </div>
               <div className="max-h-[60vh] overflow-y-auto p-6 space-y-4">
                 {systemNotifications.length > 0 ? systemNotifications.map(n => (
-                  <div key={n.id} className="p-5 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-100 dark:border-slate-800">
-                    <p className="text-xs font-black dark:text-white">{n.title}</p>
-                    <p className="text-[11px] text-gray-500 dark:text-slate-400 mt-1 font-medium">{n.message}</p>
+                  <div key={n.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                    <p className="text-xs font-black text-gray-900">{n.title}</p>
+                    <p className="text-[11px] text-gray-500 mt-1 font-medium">{n.message}</p>
                   </div>
                 )) : <p className="text-center py-10 text-gray-300 font-black uppercase text-xs">Kosong</p>}
               </div>
