@@ -17,7 +17,7 @@ interface DevPortalProps {
 
 const APPS_SCRIPT_CODE = `
 /**
- * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2 - Robust)
+ * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2.5 - Universal Compatibility)
  * 1. Create a Google Sheet.
  * 2. Name the first sheet tab: "Registrations"
  * 3. Add headers in Row 1: id, name, email, password, timestamp, status
@@ -26,38 +26,11 @@ const APPS_SCRIPT_CODE = `
  */
 
 function doGet(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
-  if (!sheet) return ContentService.createTextOutput(JSON.stringify({error: "Sheet 'Registrations' not found"})).setMimeType(ContentService.MimeType.JSON);
-  
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var rows = data.slice(1);
-  
-  var result = rows.map(function(row) {
-    var obj = {};
-    headers.forEach(function(header, i) { obj[header] = row[i]; });
-    return obj;
-  });
-  
-  return ContentService.createTextOutput(JSON.stringify(result))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
-  if (!sheet) return ContentService.createTextOutput("Error: Sheet not found").setMimeType(ContentService.MimeType.TEXT);
-  
   var action = e.parameter.action;
-  
-  // Handle case where params are in postData instead of parameter
-  if (!action && e.postData && e.postData.contents) {
-    try {
-      var body = JSON.parse(e.postData.contents);
-      action = body.action;
-      e.parameter = body; // Map for convenience
-    } catch(err) {}
-  }
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
+  if (!sheet) return createJsonResponse({error: "Sheet 'Registrations' not found"});
 
+  // Handle register in doGet for maximum browser compatibility
   if (action === 'register') {
     sheet.appendRow([
       e.parameter.id, 
@@ -67,20 +40,44 @@ function doPost(e) {
       e.parameter.timestamp, 
       'pending'
     ]);
-  } else if (action === 'updateStatus') {
+    return createJsonResponse({status: "Success"});
+  }
+  
+  // Handle status update in doGet
+  if (action === 'updateStatus') {
     var data = sheet.getDataRange().getValues();
     var id = e.parameter.id;
     var status = e.parameter.status;
-    
     for (var i = 1; i < data.length; i++) {
       if (data[i][0] == id) {
         sheet.getRange(i + 1, 6).setValue(status);
         break;
       }
     }
+    return createJsonResponse({status: "Success"});
   }
+
+  // Default: Get all data
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var rows = data.slice(1);
+  var result = rows.map(function(row) {
+    var obj = {};
+    headers.forEach(function(header, i) { obj[header] = row[i]; });
+    return obj;
+  });
   
-  return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
+  return createJsonResponse(result);
+}
+
+function doPost(e) {
+  // Post will fallback to doGet processing if parameters are passed
+  return doGet(e);
+}
+
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 `;
 
@@ -116,18 +113,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
     setShowDbSettings(false);
     alert("Database Source diperbarui. Melakukan sinkronisasi...");
     onManualSync();
-  };
-
-  const handleDateChange = (userId: string, newDate: string) => {
-    const updated = users.map(u => u.id === userId ? { ...u, subscriptionExpiry: newDate } : u);
-    setUsers(updated);
-    localStorage.setItem('sf_users_db', JSON.stringify(updated));
-  };
-
-  const toggleUserActive = (userId: string) => {
-    const updated = users.map(u => u.id === userId ? { ...u, isSubscribed: !u.isSubscribed } : u);
-    setUsers(updated);
-    localStorage.setItem('sf_users_db', JSON.stringify(updated));
   };
 
   const copyCode = () => {
@@ -188,7 +173,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
         {showScriptInfo && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide space-y-4">
              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Code size={14}/> Updated Apps Script Template</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Code size={14}/> Universal Compatibility Script</h3>
                 <button onClick={copyCode} className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl text-[10px] font-black hover:bg-white/20 transition-all"><Copy size={14}/> Copy Code</button>
              </div>
              <pre className="p-6 bg-black/40 rounded-2xl text-[10px] font-mono text-blue-200 overflow-x-auto border border-white/5 max-h-60 custom-scrollbar leading-relaxed">
@@ -198,7 +183,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
         )}
       </div>
 
-      {/* Registration Section */}
       <section className="space-y-6">
         <div className="flex flex-wrap justify-between items-center px-4 gap-4">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
@@ -219,7 +203,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
               <thead className="bg-gray-50/50">
                  <tr>
                     <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Username / Email</th>
-                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Password</th>
                     <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Aksi</th>
                  </tr>
               </thead>
@@ -231,9 +214,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
                              <p className="text-sm font-black text-gray-900">{r.name}</p>
                              <p className="text-[10px] text-gray-400 font-bold uppercase">{r.email}</p>
                           </div>
-                       </td>
-                       <td className="px-10 py-6 font-mono text-[10px] text-gray-300 tracking-widest uppercase">
-                          {r.password ? 'HIDDEN' : '••••••••'}
                        </td>
                        <td className="px-10 py-6">
                           <div className="flex justify-center gap-3">
@@ -251,61 +231,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
                        </td>
                     </tr>
                  ))}
-                 {registrations.length === 0 && (
-                    <tr><td colSpan={3} className="py-20 text-center text-gray-200 font-black uppercase text-xs tracking-[0.2em] italic">Belum ada pendaftaran baru.</td></tr>
-                 )}
               </tbody>
            </table>
-        </div>
-      </section>
-
-      {/* Active Users Section */}
-      <section className="space-y-6">
-        <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3 px-4">
-          <ShieldCheck size={16} className="text-emerald-500"/> Manajemen Lisensi Member
-        </h3>
-
-        <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50/50">
-              <tr>
-                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">User Profile</th>
-                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Lisensi Expired</th>
-                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Power</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-               {users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
-                 <tr key={u.id} className="hover:bg-gray-50/50 transition-all">
-                    <td className="px-10 py-8">
-                       <div className="flex items-center gap-5">
-                          <img src={u.avatar} className="w-14 h-14 rounded-2xl border-4 border-white shadow-lg" alt="" />
-                          <div>
-                             <p className="text-sm font-black text-gray-900">{u.name}</p>
-                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{u.email}</p>
-                          </div>
-                       </div>
-                    </td>
-                    <td className="px-10 py-8">
-                       <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm w-fit">
-                          <CalendarDays size={16} className="text-blue-400" />
-                          <input type="date" value={u.subscriptionExpiry} onChange={e => handleDateChange(u.id, e.target.value)} className="bg-transparent outline-none cursor-pointer text-xs font-black text-gray-900" />
-                       </div>
-                    </td>
-                    <td className="px-10 py-8 text-center">
-                       <button 
-                         onClick={() => toggleUserActive(u.id)}
-                         className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest mx-auto flex items-center gap-2 shadow-sm transition-all ${
-                           u.isSubscribed ? 'bg-emerald-50 text-emerald-400' : 'bg-rose-50 text-rose-400'
-                         }`}
-                       >
-                         <Power size={14}/> {u.isSubscribed ? 'Active' : 'Blocked'}
-                       </button>
-                    </td>
-                 </tr>
-               ))}
-            </tbody>
-          </table>
         </div>
       </section>
     </div>

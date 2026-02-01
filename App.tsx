@@ -66,14 +66,9 @@ const App: React.FC = () => {
   const prevRegCount = useRef(registrations.length);
   const isDev = user?.role === 'developer';
 
-  /**
-   * CRITICAL: Google Apps Script fetch handling.
-   * "Failed to fetch" usually occurs due to CORS preflight (OPTIONS) failing.
-   * We must use "Simple Requests" (no custom headers) to avoid preflight.
-   */
   const syncWithCloud = useCallback(async (isManual = false) => {
     if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) {
-      if (isManual) alert("URL Database tidak valid. Gunakan link deployment Apps Script (/exec).");
+      if (isManual) alert("URL Cloud tidak valid. Silakan cek di Settings.");
       return;
     }
     if (!isManual && isSyncing) return;
@@ -82,20 +77,13 @@ const App: React.FC = () => {
     setSyncError(null);
 
     try {
-      // Use URL parameter for action to keep it as a Simple GET Request
-      const fetchUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}action=getRegistrations&_t=${Date.now()}`;
-      
-      const res = await fetch(fetchUrl, {
+      const res = await fetch(`${dbSourceUrl}?action=getRegistrations&_t=${Date.now()}`, {
         method: 'GET',
-        mode: 'cors', // Ensure CORS is requested
-        redirect: 'follow', // Crucial for Google Apps Script redirects
-        // DO NOT add custom headers here to avoid OPTIONS preflight
+        mode: 'cors',
+        redirect: 'follow'
       });
       
-      if (!res.ok) {
-        throw new Error(`HTTP Error: ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cloudData = await res.json();
       
       if (Array.isArray(cloudData)) {
@@ -107,24 +95,9 @@ const App: React.FC = () => {
           if (newest) setDevNotif(newest);
         }
         prevRegCount.current = cloudData.length;
-        if (isManual) console.log("Cloud Sync Success");
-      } else if (cloudData.error) {
-        throw new Error(cloudData.error);
       }
     } catch (err: any) {
-      console.error("Sync Error Details:", err);
-      const msg = err.message || "Network Error";
-      setSyncError(msg);
-      
-      if (isManual) {
-        alert(
-          `Gagal Sinkronisasi: ${msg}\n\n` +
-          `Pastikan:\n` +
-          `1. Link diakhiri dengan /exec\n` +
-          `2. Deployment diset ke "Anyone" (Siapa Saja)\n` +
-          `3. Anda sudah meng-Authorize script di Google Cloud.`
-        );
-      }
+      setSyncError(err.message || "Failed to fetch");
     } finally {
       setIsSyncing(false);
     }
@@ -133,7 +106,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (dbSourceUrl) {
       syncWithCloud();
-      const interval = setInterval(() => syncWithCloud(), 60000); // Polling every minute
+      const interval = setInterval(() => syncWithCloud(), 60000);
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud]);
@@ -145,18 +118,17 @@ const App: React.FC = () => {
 
     if (dbSourceUrl) {
       try {
-        // Use no-cors for POST if we don't need to read the response, avoids preflight
-        await fetch(dbSourceUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            action: 'updateStatus',
-            id: regId,
-            status: status
-          }).toString()
+        const params = new URLSearchParams();
+        params.append('action', 'updateStatus');
+        params.append('id', regId);
+        params.append('status', status);
+
+        // GET is more reliable for writing to GAS from a browser to avoid preflight
+        await fetch(`${dbSourceUrl}?${params.toString()}`, { 
+          method: 'GET', 
+          mode: 'no-cors' 
         });
-      } catch (e) { console.error("Cloud Update Fail", e); }
+      } catch (e) { console.error("Cloud Update Error", e); }
     }
     
     if (status === 'approved') {
@@ -213,47 +185,50 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     
-    const newReg = {
+    const newReg: RegistrationRequest = {
       id: `REG-${Date.now()}`,
       name: regName,
       email: regEmail,
       password: regPassword,
       timestamp: new Date().toLocaleString('id-ID'),
-      status: 'pending' as const
+      status: 'pending'
     };
 
+    let cloudSuccess = false;
     if (dbSourceUrl) {
       try {
-        const formData = new URLSearchParams();
-        formData.append('action', 'register');
-        formData.append('id', newReg.id);
-        formData.append('name', newReg.name);
-        formData.append('email', newReg.email);
-        formData.append('password', newReg.password || '');
-        formData.append('timestamp', newReg.timestamp);
-        formData.append('status', newReg.status);
+        const params = new URLSearchParams();
+        params.append('action', 'register');
+        params.append('id', newReg.id);
+        params.append('name', newReg.name);
+        params.append('email', newReg.email);
+        params.append('password', newReg.password || '');
+        params.append('timestamp', newReg.timestamp);
 
-        await fetch(dbSourceUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData.toString()
+        // Using GET for registration to bypass POST preflight issues in browser
+        await fetch(`${dbSourceUrl}?${params.toString()}`, {
+          method: 'GET',
+          mode: 'no-cors'
         });
-        alert('Permintaan pendaftaran terkirim! Admin akan memverifikasi akun Anda.');
-      } catch (e) {
-        console.error("Cloud Register Fail", e);
-        alert('Gagal mengirim ke Cloud. Mencoba penyimpanan lokal...');
+        cloudSuccess = true;
+      } catch (err) {
+        console.warn("Cloud registration failed, falling back to local.", err);
       }
     }
 
-    // Always fallback to local storage for UX
+    // Always save locally
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
+    // Feedback to user
     setLoading(false);
+    alert("Pendaftaran Berhasil Dikirim!\n\nPermintaan Anda sedang diproses oleh tim Socialflow. Silakan tunggu verifikasi admin untuk dapat masuk ke Dashboard.");
+    
+    // Redirect back to login
     setAuthState('login');
+    setRegName(''); setRegEmail(''); setRegPassword('');
   };
 
   const handleLogout = () => {
@@ -263,18 +238,7 @@ const App: React.FC = () => {
   };
 
   const addManualInsight = (insight: PostInsight) => {
-    const updated = [insight, ...analyticsData];
-    setAnalyticsData(updated);
-  };
-
-  const handleSendMessage = (text: string) => {
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      senderId: user?.id || 'guest',
-      text,
-      timestamp: new Date().toISOString()
-    };
-    setMessages(prev => [...prev, newMessage]);
+    setAnalyticsData(prev => [insight, ...prev]);
   };
 
   const renderContent = () => {
@@ -305,7 +269,7 @@ const App: React.FC = () => {
           accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex}
           fontSize={fontSize} setFontSize={setFontSize}
           customLogo={customLogo} setCustomLogo={setCustomLogo}
-          dbSourceUrl={dbSourceUrl} setDbSourceUrl={setDbSourceUrl}
+          dbSourceUrl={dbSourceUrl} setDbSourceUrl={(url) => { setDbSourceUrl(url); localStorage.setItem('sf_db_source', url); }}
         />
       );
       case 'profile': return <Profile user={user} primaryColor={activeWorkspace.color} setUser={setUser} />;
@@ -318,7 +282,7 @@ const App: React.FC = () => {
           setUsers={setAllUsers}
           setRegistrations={setRegistrations}
           dbSourceUrl={dbSourceUrl}
-          setDbSourceUrl={setDbSourceUrl}
+          setDbSourceUrl={(url) => { setDbSourceUrl(url); localStorage.setItem('sf_db_source', url); }}
           onManualSync={() => syncWithCloud(true)}
         />
       ) : null;
@@ -328,42 +292,26 @@ const App: React.FC = () => {
 
   if (authState === 'login') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-[3rem] p-10 shadow-2xl border border-gray-100 animate-slide">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Socialflow</h1>
-            <p className="text-gray-400 font-medium mt-1 uppercase text-[10px] tracking-widest">Workspace Login</p>
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6">
+        <div className="max-w-[400px] w-full bg-white rounded-[2rem] shadow-2xl p-10 space-y-8 border border-gray-100 animate-slide">
+          <div className="text-center space-y-4">
+            <div className="w-14 h-14 bg-blue-100 text-blue-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">SF</div>
+            <div>
+              <h1 className="text-xl font-black text-gray-900">Socialflow Login</h1>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Snaillabs Analyze Tracker</p>
+            </div>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm" placeholder="Email" />
             <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
-              <input 
-                type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="Email address"
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:bg-white focus:border-blue-200 transition-all font-medium"
-              />
+              <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm" placeholder="Password" />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
             </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
-              <input 
-                type={showPassword ? "text" : "password"} required value={password} onChange={e => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:bg-white focus:border-blue-200 transition-all font-medium"
-              />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-            <button 
-              disabled={loading}
-              className="w-full py-4 bg-blue-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-blue-100 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <>Login <ArrowRight size={18} /></>}
+            <button type="submit" disabled={loading} className="w-full py-4 bg-blue-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-blue-500 shadow-lg transition-all">
+              {loading ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Masuk Dashboard"}
             </button>
+            <button type="button" onClick={() => setAuthState('register')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-400">Daftar Akun Baru</button>
           </form>
-          <div className="mt-8 text-center">
-            <p className="text-xs text-gray-400 font-medium">Belum punya akun? <button onClick={() => setAuthState('register')} className="text-blue-500 font-black hover:underline">Daftar Sekarang</button></p>
-          </div>
         </div>
       </div>
     );
@@ -371,26 +319,24 @@ const App: React.FC = () => {
 
   if (authState === 'register') {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-[3rem] p-10 shadow-2xl border border-gray-100 animate-slide">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Join Socialflow</h1>
-            <p className="text-gray-400 font-medium mt-1 uppercase text-[10px] tracking-widest">Registration Request</p>
-          </div>
-          <form onSubmit={handleRegister} className="space-y-4">
-            <input required placeholder="Nama Lengkap" value={regName} onChange={e => setRegName(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:bg-white focus:border-blue-200 transition-all font-medium" />
-            <input required type="email" placeholder="Email Aktif" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:bg-white focus:border-blue-200 transition-all font-medium" />
-            <input required type="password" placeholder="Password Baru" value={regPassword} onChange={e => setRegPassword(e.target.value)} className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl outline-none focus:bg-white focus:border-blue-200 transition-all font-medium" />
-            <button 
-              disabled={loading}
-              className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-emerald-100 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : <>Kirim Request <UserPlus size={18} /></>}
-            </button>
-          </form>
-          <div className="mt-8 text-center">
-            <button onClick={() => setAuthState('login')} className="text-xs text-gray-400 font-black uppercase tracking-widest hover:text-gray-600">Kembali ke Login</button>
-          </div>
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6">
+        <div className="max-w-[400px] w-full bg-white rounded-[2rem] shadow-2xl p-10 space-y-8 border border-gray-100 animate-slide">
+           <div className="text-center space-y-4">
+              <div className="w-14 h-14 bg-emerald-100 text-emerald-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black">SF</div>
+              <div>
+                <h1 className="text-xl font-black text-gray-900">Daftar Socialflow</h1>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Permintaan Aktivasi Akun</p>
+              </div>
+           </div>
+           <form onSubmit={handleRegister} className="space-y-4 animate-slide">
+              <input type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm" placeholder="Nama / Username" />
+              <input type="email" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm" placeholder="Email" />
+              <input type="password" required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm" placeholder="Password" />
+              <button type="submit" disabled={loading} className="w-full py-4 bg-emerald-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-emerald-500 shadow-lg">
+                {loading ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Kirim Pendaftaran"}
+              </button>
+              <button type="button" onClick={() => setAuthState('login')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-emerald-400">Kembali Login</button>
+           </form>
         </div>
       </div>
     );
@@ -409,14 +355,36 @@ const App: React.FC = () => {
             appLogo={customLogo}
           />
           <main className="flex-1 ml-72 p-10 min-h-screen overflow-x-hidden">
-            {renderContent()}
+            <header className="flex justify-between items-center mb-10">
+              <div className="flex items-center gap-4">
+                <button className="p-3 rounded-2xl bg-white border border-gray-100 shadow-sm relative"><Bell size={18} className="text-gray-400" /></button>
+                <div>
+                  <h2 className="text-[9px] font-black text-gray-300 uppercase tracking-widest">{activeWorkspace?.name}</h2>
+                  <p className="text-xl font-black text-gray-900 capitalize tracking-tight mt-0.5">{activeTab.replace(/([A-Z])/g, ' $1')}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-6">
+                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isSyncing ? 'bg-blue-50 text-blue-400' : (syncError ? 'bg-rose-50 text-rose-400' : 'bg-emerald-50 text-emerald-400')}`}>
+                    {isSyncing ? <Loader2 size={12} className="animate-spin" /> : (syncError ? <AlertTriangle size={12} /> : <Wifi size={12} />)}
+                    {isSyncing ? 'Cloud Syncing...' : (dbSourceUrl ? (syncError ? 'Cloud Error' : 'Cloud Connected') : 'Local Only')}
+                 </div>
+                 <div className="text-right">
+                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-end gap-1.5"><CheckCircle size={10} /> Active Session</p>
+                    <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">UID: {user.id}</p>
+                 </div>
+              </div>
+            </header>
+
+            <div className="max-w-6xl mx-auto">
+              {renderContent()}
+            </div>
           </main>
           
           <ChatPopup 
             primaryColor={activeWorkspace?.color || 'blue'} 
             currentUser={user} 
             messages={messages} 
-            onSendMessage={handleSendMessage} 
+            onSendMessage={(t) => setMessages(prev => [...prev, { id: Date.now().toString(), senderId: user.id, text: t, timestamp: new Date().toISOString() }])} 
             isOpen={isChatOpen} 
             setIsOpen={setIsChatOpen}
             unreadCount={0}
