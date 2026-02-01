@@ -16,12 +16,17 @@ interface DevPortalProps {
 }
 
 const APPS_SCRIPT_CODE = `
-// Paste this code into Extensions > Apps Script in Google Sheets
-const SPREADSHEET_ID = 'PASTE_YOUR_ID_HERE';
-const SHEET_NAME = 'Registrations';
+/**
+ * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW
+ * 1. Create a Google Sheet.
+ * 2. Name the first sheet: "Registrations"
+ * 3. Add headers in Row 1: id, name, email, password, timestamp, status
+ * 4. Extensions > Apps Script > Paste this code.
+ * 5. Deploy > New Deployment > Web App > Access: "Anyone".
+ */
 
 function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const rows = data.slice(1);
@@ -37,21 +42,32 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  const params = JSON.parse(e.postData.contents);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
+  const action = e.parameter.action;
   
-  if (params.action === 'register') {
-    sheet.appendRow([params.id, params.name, params.email, params.password, params.timestamp, 'pending']);
-  } else if (params.action === 'updateStatus') {
+  if (action === 'register') {
+    sheet.appendRow([
+      e.parameter.id, 
+      e.parameter.name, 
+      e.parameter.email, 
+      e.parameter.password, 
+      e.parameter.timestamp, 
+      'pending'
+    ]);
+  } else if (action === 'updateStatus') {
     const data = sheet.getDataRange().getValues();
+    const id = e.parameter.id;
+    const status = e.parameter.status;
+    
     for (let i = 1; i < data.length; i++) {
-      if (data[i][0] == params.id) {
-        sheet.getRange(i + 1, 6).setValue(params.status);
+      if (data[i][0] == id) {
+        sheet.getRange(i + 1, 6).setValue(status);
         break;
       }
     }
   }
-  return ContentService.createTextOutput("Success");
+  
+  return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
 }
 `;
 
@@ -79,9 +95,14 @@ const DevPortal: React.FC<DevPortalProps> = ({
   };
 
   const saveDbConfig = () => {
+    if (!tempUrl.includes('script.google.com')) {
+      alert("Error: Masukkan URL Deployment Apps Script (bukan URL Google Sheets).");
+      return;
+    }
     setDbSourceUrl(tempUrl);
     setShowDbSettings(false);
-    alert("Database Source diperbarui. Silakan refresh jika data tidak muncul.");
+    alert("Database Source diperbarui. Melakukan sinkronisasi...");
+    onManualSync();
   };
 
   const handleDateChange = (userId: string, newDate: string) => {
@@ -132,29 +153,29 @@ const DevPortal: React.FC<DevPortalProps> = ({
                 <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60">Pending</p>
                 <p className="text-3xl font-black text-amber-400">{registrations.filter(r => r.status === 'pending').length}</p>
              </div>
+           </div>
         </div>
-      </div>
 
-      {showDbSettings && (
+        {showDbSettings && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide">
-             <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2"><Globe size={14}/> External Database Source (Google Sheets Bridge)</h3>
+             <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2"><Globe size={14}/> Apps Script Web App URL</h3>
              <div className="flex gap-3">
                 <input 
                   value={tempUrl} 
                   onChange={e => setTempUrl(e.target.value)}
-                  placeholder="Paste Google Apps Script URL here..." 
+                  placeholder="https://script.google.com/macros/s/YOUR_ID/exec" 
                   className="flex-1 bg-black/20 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 transition-all text-blue-300"
                 />
                 <button onClick={saveDbConfig} className="px-8 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Connect</button>
              </div>
-             <p className="mt-4 text-[10px] text-amber-400 flex items-center gap-2 font-bold"><Info size={14}/> Pastikan Google Sheet Anda memiliki kolom: id, name, email, password, timestamp, status.</p>
+             <p className="mt-4 text-[10px] text-amber-400 flex items-center gap-2 font-bold"><Info size={14}/> Gunakan URL Web App (Deploy > New Deployment) bukan URL Spreadsheet.</p>
           </div>
         )}
 
         {showScriptInfo && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide space-y-4">
              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Code size={14}/> Google Apps Script Template</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Code size={14}/> Updated Apps Script Template</h3>
                 <button onClick={copyCode} className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl text-[10px] font-black hover:bg-white/20 transition-all"><Copy size={14}/> Copy Code</button>
              </div>
              <pre className="p-6 bg-black/40 rounded-2xl text-[10px] font-mono text-blue-200 overflow-x-auto border border-white/5 max-h-60 custom-scrollbar leading-relaxed">
@@ -176,7 +197,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
             className="flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-sm active:scale-95"
           >
             {isRefreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            <span>Sync Sekarang</span>
+            <span>Sync Cloud</span>
           </button>
         </div>
         
@@ -218,7 +239,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                     </tr>
                  ))}
                  {registrations.length === 0 && (
-                    <tr><td colSpan={3} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest italic">Belum ada pendaftaran baru.</td></tr>
+                    <tr><td colSpan={3} className="py-20 text-center text-gray-200 font-black uppercase text-xs tracking-[0.2em] italic">Belum ada pendaftaran baru.</td></tr>
                  )}
               </tbody>
            </table>

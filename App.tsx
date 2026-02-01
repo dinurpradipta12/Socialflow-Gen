@@ -65,43 +65,30 @@ const App: React.FC = () => {
   const prevRegCount = useRef(registrations.length);
   const isDev = user?.role === 'developer';
 
-  // SINKRONISASI REAL-TIME LINTAS TAB
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'sf_registrations_db' && e.newValue) {
-        const newRegs = JSON.parse(e.newValue);
-        setRegistrations(newRegs);
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // CLOUD DATABASE SYNC LOGIC (FETCH & POST)
+  // LOGIKA FETCH DATA DARI GOOGLE SHEETS
   const syncWithCloud = useCallback(async (isManual = false) => {
-    if (!dbSourceUrl) return;
+    if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) return;
     if (!isManual && isSyncing) return;
 
     setIsSyncing(true);
     try {
-      // Menambahkan cache buster agar tidak kena cache browser
-      const response = await fetch(`${dbSourceUrl}?action=getRegistrations&t=${Date.now()}`);
-      if (!response.ok) throw new Error("Network response was not ok");
+      // Menggunakan JSONP-like approach atau simple fetch jika Apps Script diset terbuka
+      const res = await fetch(`${dbSourceUrl}?action=getRegistrations&t=${Date.now()}`);
+      const cloudData = await res.json();
       
-      const cloudData = await response.json();
       if (Array.isArray(cloudData)) {
         setRegistrations(cloudData);
         localStorage.setItem('sf_registrations_db', JSON.stringify(cloudData));
         
-        // Cek jika ada penambahan pendaftar baru untuk notifikasi dev
         if (isDev && cloudData.length > prevRegCount.current) {
-          const pending = cloudData.find(r => r.status === 'pending');
-          if (pending) setDevNotif(pending);
+          const newest = cloudData.filter(r => r.status === 'pending')[0];
+          if (newest) setDevNotif(newest);
         }
         prevRegCount.current = cloudData.length;
+        console.log("Cloud Sync Success:", cloudData.length, "records found.");
       }
     } catch (err) {
-      console.warn("Cloud Sync Polling: Spreadsheet mungkin belum disetup atau URL salah.");
+      console.warn("Cloud Sync Fail: Pastikan URL Apps Script sudah di-deploy sebagai 'Web App' dan akses 'Anyone'.");
     } finally {
       setIsSyncing(false);
     }
@@ -110,27 +97,34 @@ const App: React.FC = () => {
   useEffect(() => {
     if (dbSourceUrl) {
       syncWithCloud();
-      const interval = setInterval(() => syncWithCloud(), 15000); // Polling setiap 15 detik
+      const interval = setInterval(() => syncWithCloud(), 15000);
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud]);
 
   const handleRegistrationAction = useCallback(async (regId: string, status: 'approved' | 'rejected') => {
+    // 1. Update UI Lokal
     const updated = registrations.map(r => r.id === regId ? { ...r, status } : r);
     setRegistrations(updated);
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
 
-    // Update ke Cloud jika ada URL
+    // 2. Update ke Cloud
     if (dbSourceUrl) {
       try {
         await fetch(dbSourceUrl, {
           method: 'POST',
-          mode: 'no-cors', // Apps Script biasanya butuh no-cors untuk simple POST
-          body: JSON.stringify({ action: 'updateStatus', id: regId, status })
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            action: 'updateStatus',
+            id: regId,
+            status: status
+          }).toString()
         });
-      } catch (e) { console.error("Update Cloud Error", e); }
+      } catch (e) { console.error("Cloud Update Fail", e); }
     }
     
+    // 3. Tambah ke User List jika Approve
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
       if (reg) {
@@ -185,33 +179,45 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     
-    const newReg: RegistrationRequest = {
+    const newReg = {
       id: `REG-${Date.now()}`,
       name: regName,
       email: regEmail,
       password: regPassword,
       timestamp: new Date().toLocaleString('id-ID'),
-      status: 'pending'
+      status: 'pending' as const
     };
 
-    // 1. Simpan Lokal
+    // 1. Kirim ke Cloud DULU (Agar data masuk ke Spreadsheet)
+    if (dbSourceUrl) {
+      try {
+        // Menggunakan URLSearchParams agar data ter-serialisasi dengan benar untuk Apps Script doPost
+        const formData = new URLSearchParams();
+        formData.append('action', 'register');
+        formData.append('id', newReg.id);
+        formData.append('name', newReg.name);
+        formData.append('email', newReg.email);
+        formData.append('password', newReg.password);
+        formData.append('timestamp', newReg.timestamp);
+        formData.append('status', newReg.status);
+
+        await fetch(dbSourceUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData.toString()
+        });
+        console.log("Pendaftaran dikirim ke Cloud.");
+      } catch (err) {
+        console.error("Cloud Post Error:", err);
+      }
+    }
+
+    // 2. Simpan Lokal (Fallback)
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
-
-    // 2. Kirim ke Cloud (Google Sheets) jika URL tersedia
-    if (dbSourceUrl) {
-      try {
-        await fetch(dbSourceUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          body: JSON.stringify({ action: 'register', ...newReg })
-        });
-      } catch (err) {
-        console.error("Cloud Registration Error:", err);
-      }
-    }
 
     setTimeout(() => {
       alert(`Pendaftaran Berhasil! Menunggu verifikasi Developer.`);
