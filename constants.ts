@@ -86,7 +86,13 @@ export const MOCK_CONTENT_PLANS: ContentPlanItem[] = [
 ];
 
 export const MOCK_WORKSPACES: Workspace[] = [
-  { id: 'ws1', name: 'Snaillabs Creative', color: 'blue', members: MOCK_USERS },
+  { 
+    id: 'ws1', 
+    name: 'Snaillabs Creative', 
+    color: 'blue', 
+    members: MOCK_USERS,
+    inviteCode: 'sf-snaillabs-2025' 
+  },
 ];
 
 export const MOCK_CONTENT: ContentItem[] = [

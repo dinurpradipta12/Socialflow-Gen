@@ -107,6 +107,7 @@ export interface Workspace {
   name: string;
   color: ThemeColor;
   members: User[];
+  inviteCode: string; // Kode unik untuk join link
 }
 
 export interface ContentItem {

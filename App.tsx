@@ -29,9 +29,8 @@ const App: React.FC = () => {
   const [customLogo, setCustomLogo] = useState<string | null>(null);
 
   const [analyticsData, setAnalyticsData] = useState<PostInsight[]>([]);
-  const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
   
-  // DATABASE PERSISTENCE (LocalStorage)
+  // DATABASE PERSISTENCE
   const [allUsers, setAllUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('sf_users_db');
     return saved ? JSON.parse(saved) : MOCK_USERS;
@@ -40,6 +39,11 @@ const App: React.FC = () => {
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>(() => {
     const saved = localStorage.getItem('sf_registrations_db');
     return saved ? JSON.parse(saved) : MOCK_REGISTRATIONS;
+  });
+
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(() => {
+    const saved = localStorage.getItem('sf_active_workspace');
+    return saved ? JSON.parse(saved) : MOCK_WORKSPACES[0];
   });
 
   const [user, setUser] = useState<User | null>(null);
@@ -56,7 +60,7 @@ const App: React.FC = () => {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
-  // Sync to Storage on changes
+  // Sync to Storage
   useEffect(() => {
     localStorage.setItem('sf_users_db', JSON.stringify(allUsers));
   }, [allUsers]);
@@ -66,15 +70,44 @@ const App: React.FC = () => {
   }, [registrations]);
 
   useEffect(() => {
+    localStorage.setItem('sf_active_workspace', JSON.stringify(activeWorkspace));
+  }, [activeWorkspace]);
+
+  useEffect(() => {
     document.documentElement.style.setProperty('--primary-color', primaryColorHex);
     document.documentElement.style.setProperty('--accent-color', accentColorHex);
   }, [primaryColorHex, accentColorHex]);
+
+  // LOGIKA JOIN WORKSPACE OTOMATIS
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const joinCode = urlParams.get('join');
+
+    if (joinCode && user && activeWorkspace.inviteCode === joinCode) {
+      // Cek apakah user sudah jadi member
+      const isAlreadyMember = activeWorkspace.members.some(m => m.id === user.id);
+      
+      if (!isAlreadyMember) {
+        const updatedWorkspace = {
+          ...activeWorkspace,
+          members: [...activeWorkspace.members, user]
+        };
+        setActiveWorkspace(updatedWorkspace);
+        
+        // Bersihkan URL agar tidak trigger berulang
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+        
+        alert(`Berhasil! Anda telah ditambahkan ke workspace "${activeWorkspace.name}" secara otomatis.`);
+        setActiveTab('team');
+      }
+    }
+  }, [user, activeWorkspace]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      // 1. Cek Kredensial Developer Utama
       if (email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password) {
         const devUser = allUsers.find(u => u.role === 'developer');
         if (devUser) {
@@ -85,16 +118,15 @@ const App: React.FC = () => {
         }
       }
 
-      // 2. Cek Akun User di Database (Yang sudah di-approve)
       const loggedInUser = allUsers.find(u => u.email === email);
       
       if (loggedInUser && loggedInUser.isSubscribed) {
         setUser(loggedInUser);
         setAuthState('authenticated');
       } else if (loggedInUser && !loggedInUser.isSubscribed) {
-        alert('Akses Dibatasi: Akun Anda sedang dinonaktifkan. Hubungi Developer.');
+        alert('Akses Dibatasi: Akun sedang nonaktif.');
       } else {
-        alert('Akses Ditolak: Akun tidak ditemukan atau belum diverifikasi oleh Developer. Pastikan Anda sudah mendaftar dan disetujui.');
+        alert('Akses Ditolak: Pastikan sudah mendaftar dan disetujui Developer.');
       }
       setLoading(false);
     }, 1200);
@@ -112,13 +144,8 @@ const App: React.FC = () => {
         timestamp: new Date().toLocaleString('id-ID'),
         status: 'pending'
       };
-      
-      const updatedRegs = [newReg, ...registrations];
-      setRegistrations(updatedRegs);
-      // Force immediate save
-      localStorage.setItem('sf_registrations_db', JSON.stringify(updatedRegs));
-      
-      alert(`Pendaftaran Berhasil! Halo ${regName}, data Anda telah masuk ke sistem Developer. Silakan tunggu verifikasi agar dapat login menggunakan email ${regEmail}.`);
+      setRegistrations(prev => [newReg, ...prev]);
+      alert(`Pendaftaran Berhasil! Menunggu verifikasi Developer.`);
       setAuthState('login');
       setLoading(false);
       setRegName(''); setRegEmail(''); setRegPassword('');
@@ -126,8 +153,7 @@ const App: React.FC = () => {
   };
 
   const handleRegistrationAction = (regId: string, status: 'approved' | 'rejected') => {
-    const updatedRegs = registrations.map(r => r.id === regId ? { ...r, status } : r);
-    setRegistrations(updatedRegs);
+    setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
     
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
@@ -155,22 +181,6 @@ const App: React.FC = () => {
     setActiveWorkspace(prev => ({ ...prev, name, color }));
   };
 
-  const handleSendMessage = (text: string) => {
-    setMessages(prev => [...prev, { id: Date.now().toString(), senderId: user!.id, text, timestamp: new Date().toISOString() }]);
-    setTimeout(() => {
-      setIsOtherUserTyping(true);
-      setTimeout(() => {
-        setIsOtherUserTyping(false);
-        setMessages(prev => [...prev, { 
-          id: (Date.now() + 1).toString(), 
-          senderId: 'dev-1', 
-          text: 'Halo! Kami dari tim Socialflow. Pesan Anda sedang kami tinjau.', 
-          timestamp: new Date().toISOString() 
-        }]);
-      }, 3000);
-    }, 800);
-  };
-
   const handleLogout = () => {
     setAuthState('login');
     setUser(null);
@@ -189,14 +199,12 @@ const App: React.FC = () => {
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Snaillabs Analyze Tracker</p>
             </div>
           </div>
-
           {authState === 'login' ? (
-            <>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-3">
+            <form onSubmit={handleLogin} className="space-y-4">
+               <div className="space-y-3">
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-400 transition-colors" size={16} />
-                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email Developer/User" />
+                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email" />
                   </div>
                   <div className="relative group">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-400 transition-colors" size={16} />
@@ -205,34 +213,33 @@ const App: React.FC = () => {
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
-                </div>
-                <button type="submit" disabled={loading} className="w-full py-4 bg-blue-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-blue-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-100">
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <>Masuk Dashboard <ArrowRight size={14} /></>}
-                </button>
-              </form>
-              <div className="text-center pt-2">
-                <button onClick={() => setAuthState('register')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-400 transition-colors">Belum punya akses? Daftar di sini</button>
-              </div>
-            </>
+               </div>
+               <button type="submit" disabled={loading} className="w-full py-4 bg-blue-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-blue-500 active:scale-[0.98] transition-all disabled:opacity-50 shadow-lg shadow-blue-100">
+                  {loading ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Masuk Dashboard"}
+               </button>
+               <div className="text-center pt-2">
+                 <button type="button" onClick={() => setAuthState('register')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-400">Daftar Akun Baru</button>
+               </div>
+            </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4 animate-slide">
                <div className="space-y-3">
-                  <input type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Nama Lengkap / Username" />
-                  <input type="email" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email" />
+                  <input type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm" placeholder="Username / Nama" />
+                  <input type="email" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm" placeholder="Email" />
                   <div className="relative">
-                    <input type={showPassword ? "text" : "password"} required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm pr-12" placeholder="Password" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-900 transition-colors">{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                    <input type={showPassword ? "text" : "password"} required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 text-sm pr-12" placeholder="Password" />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300">{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                   </div>
                </div>
-               <button type="submit" disabled={loading} className="w-full py-4 bg-purple-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-purple-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-100">
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <>Kirim Permintaan Akses <UserPlus size={14} /></>}
-                </button>
-                <div className="text-center pt-2">
-                  <button onClick={() => setAuthState('login')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-purple-400 transition-colors">Sudah punya akun? Kembali login</button>
-                </div>
+               <button type="submit" disabled={loading} className="w-full py-4 bg-purple-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-purple-500 shadow-lg shadow-purple-100">
+                  {loading ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Kirim Pendaftaran"}
+               </button>
+               <div className="text-center pt-2">
+                 <button type="button" onClick={() => setAuthState('login')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-purple-400">Kembali Login</button>
+               </div>
             </form>
           )}
-          <div className="pt-4 text-center"><p className="text-[9px] text-gray-200 font-black uppercase tracking-widest">© 2025 SNAILLABS.ID</p></div>
+          <div className="text-center"><p className="text-[9px] text-gray-200 font-black uppercase tracking-widest">© 2025 SNAILLABS.ID</p></div>
         </div>
       </div>
     );
@@ -240,31 +247,6 @@ const App: React.FC = () => {
 
   const isDev = user.role === 'developer';
   const fontSizeClass = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-lg' : 'text-sm';
-
-  const renderContent = () => {
-    if (activeTab === 'settings' && !isDev && user.role !== 'admin' && user.role !== 'superuser') {
-      return (
-        <div className="min-h-[60vh] flex flex-col items-center justify-center p-10 bg-white rounded-[3rem] animate-slide border border-gray-50">
-          <Shield size={48} className="text-gray-200 mb-4" />
-          <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Access Restricted</p>
-          <p className="text-[10px] text-gray-400 font-bold mt-1">Hanya Administrator yang memiliki izin konfigurasi.</p>
-        </div>
-      );
-    }
-    switch (activeTab) {
-      case 'dashboard': return <Dashboard primaryColor={activeWorkspace.color} />;
-      case 'contentPlan': return <ContentPlan onSaveInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} users={allUsers} />;
-      case 'calendar': return <Calendar primaryColor={activeWorkspace.color} />;
-      case 'ads': return <AdsWorkspace primaryColor={activeWorkspace.color} />;
-      case 'analytics': return <Analytics analyticsData={analyticsData} onSaveInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} />;
-      case 'tracker': return <LinkTracker onSaveManualInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} />;
-      case 'team': return <Team primaryColor={activeWorkspace.color} currentUser={user} workspace={activeWorkspace} onUpdateWorkspace={updateWorkspace} addSystemNotification={(n) => setSystemNotifications([ {...n, id: Date.now().toString(), timestamp: new Date().toISOString(), read: false}, ...systemNotifications])} />;
-      case 'profile': return <Profile user={user} primaryColor={activeWorkspace.color} setUser={setUser} />;
-      case 'settings': return <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex} fontSize={fontSize} setFontSize={setFontSize} customLogo={customLogo} setCustomLogo={setCustomLogo} />;
-      case 'devPortal': return isDev ? <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} /> : <Dashboard primaryColor={activeWorkspace.color} />;
-      default: return <Dashboard primaryColor={activeWorkspace.color} />;
-    }
-  };
 
   return (
     <div className={`min-h-screen bg-[#FDFDFD] text-gray-900 ${fontSizeClass}`}>
@@ -288,9 +270,33 @@ const App: React.FC = () => {
              </div>
           </div>
         </header>
-        <div className="max-w-6xl mx-auto">{renderContent()}</div>
+
+        <div className="max-w-6xl mx-auto">
+          {activeTab === 'dashboard' && <Dashboard primaryColor={activeWorkspace.color} />}
+          {activeTab === 'contentPlan' && <ContentPlan onSaveInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} users={allUsers} />}
+          {activeTab === 'calendar' && <Calendar primaryColor={activeWorkspace.color} />}
+          {activeTab === 'ads' && <AdsWorkspace primaryColor={activeWorkspace.color} />}
+          {activeTab === 'analytics' && <Analytics analyticsData={analyticsData} onSaveInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} />}
+          {activeTab === 'tracker' && <LinkTracker onSaveManualInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} />}
+          {activeTab === 'team' && (
+            <Team 
+              primaryColor={activeWorkspace.color} 
+              currentUser={user} 
+              workspace={activeWorkspace} 
+              onUpdateWorkspace={updateWorkspace} 
+              addSystemNotification={(n) => setSystemNotifications([{...n, id: Date.now().toString(), timestamp: new Date().toISOString(), read: false}, ...systemNotifications])}
+              allUsers={allUsers}
+              setWorkspace={setActiveWorkspace}
+            />
+          )}
+          {activeTab === 'profile' && <Profile user={user} primaryColor={activeWorkspace.color} setUser={setUser} />}
+          {activeTab === 'settings' && <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex} fontSize={fontSize} setFontSize={setFontSize} customLogo={customLogo} setCustomLogo={setCustomLogo} />}
+          {activeTab === 'devPortal' && isDev && (
+            <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} />
+          )}
+        </div>
       </main>
-      <ChatPopup primaryColor={activeWorkspace.color} currentUser={user} messages={messages} onSendMessage={handleSendMessage} isOpen={isChatOpen} setIsOpen={setIsChatOpen} unreadCount={0} isTyping={isOtherUserTyping} />
+      <ChatPopup primaryColor={activeWorkspace.color} currentUser={user} messages={messages} onSendMessage={(t) => setMessages([...messages, { id: Date.now().toString(), senderId: user!.id, text: t, timestamp: new Date().toISOString() }])} isOpen={isChatOpen} setIsOpen={setIsChatOpen} unreadCount={0} />
     </div>
   );
 };
