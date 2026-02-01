@@ -68,7 +68,7 @@ const App: React.FC = () => {
 
   const syncWithCloud = useCallback(async (isManual = false) => {
     if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) {
-      if (isManual) alert("URL Cloud tidak valid. Silakan cek di Settings.");
+      if (isManual) alert("URL Cloud belum diatur. Masuk ke Dev Portal untuk mengatur URL Web App.");
       return;
     }
     if (!isManual && isSyncing) return;
@@ -123,7 +123,6 @@ const App: React.FC = () => {
         params.append('id', regId);
         params.append('status', status);
 
-        // GET is more reliable for writing to GAS from a browser to avoid preflight
         await fetch(`${dbSourceUrl}?${params.toString()}`, { 
           method: 'GET', 
           mode: 'no-cors' 
@@ -194,41 +193,43 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
-    let cloudSuccess = false;
     if (dbSourceUrl) {
-      try {
-        const params = new URLSearchParams();
-        params.append('action', 'register');
-        params.append('id', newReg.id);
-        params.append('name', newReg.name);
-        params.append('email', newReg.email);
-        params.append('password', newReg.password || '');
-        params.append('timestamp', newReg.timestamp);
+      if (!dbSourceUrl.includes('/exec')) {
+        alert("Peringatan: URL Database tidak valid (harus diakhiri /exec). Data mungkin hanya tersimpan secara lokal.");
+      } else {
+        try {
+          const params = new URLSearchParams();
+          params.append('action', 'register');
+          params.append('id', newReg.id);
+          params.append('name', newReg.name);
+          params.append('email', newReg.email);
+          params.append('password', newReg.password || '');
+          params.append('timestamp', newReg.timestamp);
 
-        // Using GET for registration to bypass POST preflight issues in browser
-        await fetch(`${dbSourceUrl}?${params.toString()}`, {
-          method: 'GET',
-          mode: 'no-cors'
-        });
-        cloudSuccess = true;
-      } catch (err) {
-        console.warn("Cloud registration failed, falling back to local.", err);
+          // PENTING: Gunakan mode: 'no-cors' agar request tetap terkirim meskipun browser menganggap ada CORS error
+          await fetch(`${dbSourceUrl}?${params.toString()}`, {
+            method: 'GET',
+            mode: 'no-cors'
+          });
+          console.log("Cloud request sent.");
+        } catch (err) {
+          console.warn("Koneksi Cloud gagal:", err);
+        }
       }
     }
 
-    // Always save locally
+    // Selalu simpan di lokal sebagai backup
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
-    // Feedback to user
-    setLoading(false);
-    alert("Pendaftaran Berhasil Dikirim!\n\nPermintaan Anda sedang diproses oleh tim Socialflow. Silakan tunggu verifikasi admin untuk dapat masuk ke Dashboard.");
-    
-    // Redirect back to login
-    setAuthState('login');
-    setRegName(''); setRegEmail(''); setRegPassword('');
+    setTimeout(() => {
+      setLoading(false);
+      alert("PENDAFTARAN BERHASIL!\n\nData Anda telah dikirim ke tim Socialflow. Silakan hubungi Admin untuk proses aktivasi akun Anda.");
+      setAuthState('login');
+      setRegName(''); setRegEmail(''); setRegPassword('');
+    }, 1500);
   };
 
   const handleLogout = () => {
