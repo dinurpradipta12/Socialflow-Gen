@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 import { MOCK_USERS } from '../constants';
@@ -47,47 +46,47 @@ const DevPortal: React.FC<{ primaryColorHex: string }> = ({ primaryColorHex }) =
 
       <section className="space-y-6">
         <div className="flex justify-between items-center px-4">
-           <h3 className="text-xs font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
+           <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
              <ShieldCheck size={16} className="text-blue-500"/> Manajemen Lisensi Global
            </h3>
-           <div className="flex items-center gap-3 bg-white dark:bg-slate-900 px-5 py-2.5 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm focus-within:ring-2 focus-within:ring-[var(--primary-color)] transition-all">
+           <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border border-gray-100 shadow-sm focus-within:ring-2 focus-within:ring-[var(--primary-color)] transition-all">
              <Search size={16} className="text-gray-400" />
-             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari user..." className="bg-transparent outline-none text-xs font-bold dark:text-white w-48" />
+             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari user..." className="bg-transparent outline-none text-xs font-bold text-gray-900 w-48" />
            </div>
         </div>
 
-        <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
           <table className="w-full text-left">
-            <thead className="bg-gray-50/50 dark:bg-slate-800/30">
+            <thead className="bg-gray-50/50">
               <tr>
-                <th className="px-10 py-6 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Identitas Member</th>
-                <th className="px-10 py-6 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Masa Aktif</th>
-                <th className="px-10 py-6 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest text-center">Perpanjang</th>
-                <th className="px-10 py-6 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest text-center">Kontrol</th>
+                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Identitas Member</th>
+                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Masa Aktif</th>
+                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Perpanjang</th>
+                <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Kontrol</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+            <tbody className="divide-y divide-gray-50">
                {appUsers.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
-                 <tr key={u.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/20 transition-all">
+                 <tr key={u.id} className="hover:bg-gray-50/50 transition-all">
                     <td className="px-10 py-8">
                        <div className="flex items-center gap-5">
-                          <img src={u.avatar} className="w-14 h-14 rounded-2xl border-4 border-white dark:border-slate-800 shadow-lg" alt="" />
+                          <img src={u.avatar} className="w-14 h-14 rounded-2xl border-4 border-white shadow-lg" alt="" />
                           <div>
-                             <p className="text-sm font-black dark:text-white">{u.name}</p>
-                             <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">{u.role}</p>
+                             <p className="text-sm font-black text-gray-900">{u.name}</p>
+                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{u.role}</p>
                           </div>
                        </div>
                     </td>
                     <td className="px-10 py-8">
-                       <div className="flex items-center gap-3 bg-white dark:bg-slate-800 px-4 py-2 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
+                       <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm">
                           <CalendarDays size={16} className="text-blue-500" />
-                          <input type="date" value={u.subscriptionExpiry} onChange={e => handleDateChange(u.id, e.target.value)} className="bg-transparent outline-none cursor-pointer text-xs font-black dark:text-white" />
+                          <input type="date" value={u.subscriptionExpiry} onChange={e => handleDateChange(u.id, e.target.value)} className="bg-transparent outline-none cursor-pointer text-xs font-black text-gray-900" />
                        </div>
                     </td>
                     <td className="px-10 py-8">
                        <div className="flex justify-center gap-2">
-                          <button onClick={() => renewLicense(u.id, '1m')} className="px-4 py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">+1 Bln</button>
-                          <button onClick={() => renewLicense(u.id, '3m')} className="px-4 py-2.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">+3 Bln</button>
+                          <button onClick={() => renewLicense(u.id, '1m')} className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">+1 Bln</button>
+                          <button onClick={() => renewLicense(u.id, '3m')} className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">+3 Bln</button>
                           <button onClick={() => renewLicense(u.id, '1y')} className="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all">+1 Thn</button>
                        </div>
                     </td>
@@ -95,7 +94,7 @@ const DevPortal: React.FC<{ primaryColorHex: string }> = ({ primaryColorHex }) =
                        <button 
                          onClick={() => toggleUserActive(u.id)}
                          className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest mx-auto flex items-center gap-2 shadow-sm transition-all ${
-                           u.isSubscribed ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20' : 'bg-rose-500 text-white shadow-rose-100'
+                           u.isSubscribed ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-500 text-white shadow-rose-100'
                          }`}
                        >
                          <Power size={14}/> {u.isSubscribed ? 'Active' : 'Blocked'}
