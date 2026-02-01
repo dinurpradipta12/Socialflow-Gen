@@ -91,7 +91,9 @@ export const MOCK_WORKSPACES: Workspace[] = [
     name: 'Snaillabs Creative', 
     color: 'blue', 
     members: MOCK_USERS,
-    inviteCode: 'sf-snaillabs-2025' 
+    inviteCode: 'sf-snaillabs-2025',
+    // Added missing ownerId property to satisfy Workspace interface
+    ownerId: '1'
   },
 ];
 

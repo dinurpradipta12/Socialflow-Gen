@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, ThemeColor, Permissions, SystemNotification, Workspace } from '../types';
 import { THEME_COLORS } from '../constants';
-import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Link as LinkIcon, Share2, Palette, Settings as SettingsIcon, Mail, Copy } from 'lucide-react';
+import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Trash2, Key, Target, CheckSquare, Plus } from 'lucide-react';
 
 interface TeamProps {
   primaryColor: ThemeColor;
@@ -10,136 +10,158 @@ interface TeamProps {
   workspace: Workspace;
   onUpdateWorkspace: (name: string, color: ThemeColor) => void;
   addSystemNotification: (notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) => void;
-  allUsers: User[]; // Menggunakan list user dinamis dari App.tsx
+  allUsers: User[];
+  setUsers: (users: User[]) => void;
   setWorkspace: (ws: Workspace) => void;
 }
 
-const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpdateWorkspace, addSystemNotification, allUsers, setWorkspace }) => {
+const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpdateWorkspace, addSystemNotification, allUsers, setUsers, setWorkspace }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [isCopied, setIsCopied] = useState(false);
-  
-  const [wsName, setWsName] = useState(workspace.name);
-  const [wsColor, setWsColor] = useState<ThemeColor>(workspace.color);
+  const [newKpi, setNewKpi] = useState('');
   
   const colorSet = THEME_COLORS[primaryColor];
-  const isManagement = currentUser.role === 'superuser' || currentUser.role === 'developer' || currentUser.role === 'admin';
+  const isOwner = currentUser.role === 'superuser' || currentUser.id === workspace.ownerId || currentUser.role === 'developer';
 
-  const copyInviteLink = () => {
-    // Generate URL: baseUrl + ?join=inviteCode
-    const baseUrl = window.location.origin + window.location.pathname;
-    const inviteUrl = `${baseUrl}?join=${workspace.inviteCode}`;
-    
-    navigator.clipboard.writeText(inviteUrl).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
+  const handleRemoveMember = (userId: string) => {
+    if (userId === workspace.ownerId) {
+      alert("Owner tidak bisa dihapus dari tim.");
+      return;
+    }
+    if (confirm("Hapus member ini secara permanen dari Workspace?")) {
+      const updatedMembers = workspace.members.filter(m => m.id !== userId);
+      setWorkspace({ ...workspace, members: updatedMembers });
+      // Hapus workspaceId dari user di database global
+      setUsers(allUsers.map(u => u.id === userId ? { ...u, workspaceId: undefined } : u));
+    }
+  };
+
+  const handleUpdateUser = (updated: User) => {
+    const updatedMembers = workspace.members.map(m => m.id === updated.id ? updated : m);
+    setWorkspace({ ...workspace, members: updatedMembers });
+    setUsers(allUsers.map(u => u.id === updated.id ? updated : u));
+    setEditingUser(null);
+  };
+
+  const togglePermission = (key: keyof Permissions) => {
+    if (!editingUser) return;
+    setEditingUser({
+      ...editingUser,
+      permissions: {
+        ...editingUser.permissions,
+        [key]: !editingUser.permissions[key]
+      }
     });
   };
 
-  const handleInviteByEmail = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Cek di allUsers dinamis
-    const targetUser = allUsers.find(u => u.email.toLowerCase() === inviteEmail.toLowerCase());
-    
-    if (targetUser) {
-      // Tambahkan ke member workspace jika belum ada
-      if (workspace.members.some(m => m.id === targetUser.id)) {
-        alert('User sudah menjadi anggota tim.');
-      } else {
-        const updatedMembers = [...workspace.members, targetUser];
-        setWorkspace({ ...workspace, members: updatedMembers });
-        alert(`${targetUser.name} berhasil ditambahkan ke tim.`);
-      }
-    } else {
-      alert('Email belum terdaftar atau belum disetujui Developer. Silakan minta user untuk mendaftar dulu.');
-    }
-    setInviteEmail('');
-    setIsInviteModalOpen(false);
+  const addKpi = () => {
+    if (!editingUser || !newKpi.trim()) return;
+    setEditingUser({
+      ...editingUser,
+      kpi: [...editingUser.kpi, newKpi.trim()]
+    });
+    setNewKpi('');
   };
 
-  const handleUpdateUserPermissions = (updated: User) => {
-    const updatedMembers = workspace.members.map(m => m.id === updated.id ? updated : m);
-    setWorkspace({ ...workspace, members: updatedMembers });
-    setEditingUser(null);
+  const removeKpi = (index: number) => {
+    if (!editingUser) return;
+    setEditingUser({
+      ...editingUser,
+      kpi: editingUser.kpi.filter((_, i) => i !== index)
+    });
   };
 
   return (
     <div className="space-y-8 animate-slide">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+      <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Team Workspace</h1>
-          <p className="text-gray-400 mt-1 font-medium italic">Kelola kolaborasi tim Snaillabs di sini.</p>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Team Hub</h1>
+          <p className="text-gray-400 mt-1 font-medium">Kelola hak akses dan performa tim di Workspace {workspace.name}.</p>
         </div>
-        <div className="flex flex-wrap gap-4">
-          <button 
-            onClick={copyInviteLink}
-            className={`flex items-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm hover:bg-gray-50 transition-all ${isCopied ? 'text-emerald-500' : 'text-gray-400'}`}
-          >
-            {isCopied ? <Check size={16}/> : <Share2 size={16} />}
-            <span>{isCopied ? 'Link Tersalin!' : 'Salin Link Undangan'}</span>
-          </button>
-          {isManagement && (
-            <button 
-              onClick={() => setIsInviteModalOpen(true)}
-              className={`flex items-center gap-2 px-8 py-4 ${colorSet.bg} ${colorSet.text} rounded-3xl font-black uppercase tracking-widest text-[10px] hover:brightness-95 transition-all shadow-sm active:scale-95`}
-            >
-              <UserPlus size={18} />
-              <span>Undang via Email</span>
-            </button>
-          )}
-        </div>
+        <button 
+          onClick={() => setIsInviteModalOpen(true)}
+          className={`flex items-center gap-2 px-8 py-4 ${colorSet.bg} ${colorSet.text} rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all`}
+        >
+          <UserPlus size={18} />
+          <span>Invite Member</span>
+        </button>
       </div>
 
-      {isInviteModalOpen && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
-           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setIsInviteModalOpen(false)}></div>
-           <div className="relative bg-white w-full max-w-md rounded-[3rem] shadow-2xl border border-gray-50 animate-slide overflow-hidden p-10">
-              <div className="flex justify-between items-center mb-8">
-                 <h2 className="text-xl font-black text-gray-900">Undang Anggota</h2>
-                 <button onClick={() => setIsInviteModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-xl"><X /></button>
-              </div>
-              <form onSubmit={handleInviteByEmail} className="space-y-6">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Email User Terdaftar</label>
-                    <input required type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="email@example.com" className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white outline-none font-bold text-gray-700" />
-                 </div>
-                 <button type="submit" className="w-full py-5 bg-blue-100 text-blue-500 font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-sm hover:bg-blue-200 transition-all">Tambahkan ke Tim</button>
-              </form>
-           </div>
-        </div>
-      )}
-
       {editingUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setEditingUser(null)}></div>
-          <div className="relative bg-white w-full max-w-xl rounded-[3rem] shadow-2xl overflow-hidden animate-slide border border-gray-50">
-             <div className="p-10 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" onClick={() => setEditingUser(null)}></div>
+          <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-slide flex flex-col max-h-[90vh]">
+             <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                  <img src={editingUser.avatar} className="w-16 h-16 rounded-[1.5rem] border-4 border-white shadow-md" alt="" />
+                  <img src={editingUser.avatar} className="w-16 h-16 rounded-2xl border-4 border-white shadow-md" alt="" />
                   <div>
                     <h2 className="text-xl font-black text-gray-900">{editingUser.name}</h2>
-                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{editingUser.email}</p>
+                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">{editingUser.role} • {editingUser.email}</p>
                   </div>
                 </div>
-                <button onClick={() => setEditingUser(null)} className="p-3"><X size={20} /></button>
+                <button onClick={() => setEditingUser(null)} className="p-3 hover:bg-gray-50 rounded-xl"><X size={24} /></button>
              </div>
-             <div className="p-10 space-y-10">
+             
+             <div className="p-8 space-y-10 overflow-y-auto custom-scrollbar flex-1">
+                {/* Role Selection */}
                 <div className="space-y-4">
-                  <h3 className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Peran / Jabatan</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {['admin', 'editor', 'viewer'].map(role => (
-                      <button key={role} onClick={() => setEditingUser({...editingUser, role: role as any})} className={`py-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${editingUser.role === role ? `bg-blue-100 text-blue-500 border-transparent shadow-sm` : 'bg-white text-gray-400 border-gray-100 hover:bg-gray-50'}`}>
-                        {role}
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Shield size={14}/> User Authority Role</h3>
+                  <div className="grid grid-cols-4 gap-2">
+                    {['admin', 'editor', 'viewer', 'superuser'].map(r => (
+                      <button key={r} onClick={() => setEditingUser({...editingUser, role: r as any})} className={`py-3 rounded-xl border text-[9px] font-black uppercase tracking-widest transition-all ${editingUser.role === r ? 'bg-blue-100 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                        {r}
                       </button>
                     ))}
                   </div>
                 </div>
+
+                {/* Permissions Toggles */}
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Key size={14}/> Access Permissions</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {Object.keys(editingUser.permissions).map(key => (
+                      <button 
+                        key={key} 
+                        onClick={() => togglePermission(key as keyof Permissions)}
+                        className={`p-4 rounded-2xl border text-left flex flex-col transition-all ${editingUser.permissions[key as keyof Permissions] ? 'bg-emerald-50 border-emerald-100' : 'bg-gray-50 border-gray-100 opacity-60'}`}
+                      >
+                         <div className="flex justify-between items-start mb-1">
+                           <span className="text-[10px] font-black uppercase text-gray-900">{key}</span>
+                           {editingUser.permissions[key as keyof Permissions] ? <CheckSquare size={14} className="text-emerald-500" /> : <X size={14} className="text-gray-300" />}
+                         </div>
+                         <span className="text-[8px] font-bold text-gray-400 uppercase">Allow Page View</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* KPI Management */}
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2"><Target size={14}/> Individual KPI Targets</h3>
+                  <div className="flex gap-2">
+                    <input 
+                      value={newKpi} 
+                      onChange={e => setNewKpi(e.target.value)}
+                      placeholder="Contoh: Increase Reels Reach by 10%" 
+                      className="flex-1 px-5 py-3 bg-gray-50 border border-gray-100 rounded-xl outline-none text-xs font-bold" 
+                    />
+                    <button onClick={addKpi} className="px-5 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest"><Plus size={16}/></button>
+                  </div>
+                  <div className="space-y-2">
+                    {editingUser.kpi.map((k, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                        <span className="text-xs font-bold text-gray-700">{k}</span>
+                        <button onClick={() => removeKpi(i)} className="p-1.5 text-rose-300 hover:text-rose-500"><X size={14}/></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
              </div>
-             <div className="p-10 bg-gray-50/50 flex gap-4">
-                <button onClick={() => setEditingUser(null)} className="flex-1 py-5 bg-white border border-gray-200 text-gray-400 font-black text-[10px] uppercase rounded-[1.5rem]">Batal</button>
-                <button onClick={() => handleUpdateUserPermissions(editingUser)} className="flex-1 py-5 bg-blue-100 text-blue-500 font-black text-[10px] uppercase rounded-[1.5rem] shadow-sm">Simpan</button>
+
+             <div className="p-8 bg-gray-50 flex gap-4">
+                <button onClick={() => setEditingUser(null)} className="flex-1 py-4 bg-white border border-gray-200 text-gray-400 font-black text-[10px] uppercase rounded-2xl">Batal</button>
+                <button onClick={() => handleUpdateUser(editingUser)} className="flex-1 py-4 bg-blue-500 text-white font-black text-[10px] uppercase rounded-2xl shadow-lg">Simpan Authority</button>
              </div>
           </div>
         </div>
@@ -149,10 +171,10 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Member</th>
-              <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Role</th>
-              <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Status Access</th>
-              <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Tindakan</th>
+              <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Team Member</th>
+              <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Authority Role</th>
+              <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">KPI Count</th>
+              <th className="px-10 py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Tindakan</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -162,26 +184,34 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
                   <div className="flex items-center gap-5">
                     <img src={u.avatar} className="w-14 h-14 rounded-2xl border-4 border-white shadow-md ring-1 ring-gray-100" alt="" />
                     <div>
-                      <p className="text-sm font-black text-gray-900">{u.name}</p>
+                      <p className="text-sm font-black text-gray-900">{u.name} {u.id === workspace.ownerId && <span className="ml-1 text-[8px] bg-amber-100 text-amber-600 px-1.5 py-0.5 rounded">OWNER</span>}</p>
                       <p className="text-[10px] text-gray-300 font-bold uppercase mt-1">{u.email}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-10 py-8">
-                  <span className="px-3 py-1.5 rounded-xl bg-blue-50 text-blue-500 border border-blue-100 text-[9px] font-black uppercase tracking-widest">
+                  <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${u.role === 'superuser' ? 'bg-amber-50 text-amber-500 border border-amber-100' : 'bg-blue-50 text-blue-500 border border-blue-100'}`}>
                     {u.role}
                   </span>
                 </td>
                 <td className="px-10 py-8">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-                    <span className="text-[10px] font-black uppercase text-gray-600">Terdaftar</span>
-                  </div>
+                  <span className="text-xs font-black text-gray-500">{u.kpi.length} Goals Set</span>
                 </td>
-                <td className="px-10 py-8 text-center">
-                  <button onClick={() => setEditingUser({...u})} className="p-3 text-gray-300 hover:text-blue-500 rounded-xl hover:bg-blue-50 transition-all">
-                    <MoreVertical size={20} />
-                  </button>
+                <td className="px-10 py-8">
+                  <div className="flex justify-center gap-2">
+                    {isOwner && (
+                      <>
+                        <button onClick={() => setEditingUser({...u})} className="p-3 text-blue-400 hover:bg-blue-50 rounded-xl transition-all" title="Manage Permission & KPI">
+                          <Edit3 size={18} />
+                        </button>
+                        {u.id !== workspace.ownerId && (
+                          <button onClick={() => handleRemoveMember(u.id)} className="p-3 text-rose-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all" title="Remove Member Permanently">
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

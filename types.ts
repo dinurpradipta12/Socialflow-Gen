@@ -37,6 +37,7 @@ export interface User {
   socialMedia?: string;
   birthDate?: string;
   settings?: UserSettings;
+  workspaceId?: string; // Melacak workspace mana yang diikuti user
 }
 
 export interface UserSettings {
@@ -107,7 +108,8 @@ export interface Workspace {
   name: string;
   color: ThemeColor;
   members: User[];
-  inviteCode: string; // Kode unik untuk join link
+  inviteCode: string;
+  ownerId: string; // Pemilik workspace
 }
 
 export interface ContentItem {
