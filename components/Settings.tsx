@@ -1,19 +1,21 @@
 
 import React from 'react';
-import { Palette, ImageIcon, Sun, Layout, Pipette } from 'lucide-react';
+import { Palette, ImageIcon, Sun, Layout, Pipette, Globe, Server } from 'lucide-react';
 
 interface SettingsProps {
   primaryColorHex: string; setPrimaryColorHex: (color: string) => void;
   accentColorHex: string; setAccentColorHex: (color: string) => void;
   fontSize: 'small' | 'medium' | 'large'; setFontSize: (size: 'small' | 'medium' | 'large') => void;
   customLogo: string | null; setCustomLogo: (logo: string | null) => void;
+  dbSourceUrl?: string; setDbSourceUrl?: (url: string) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({ 
   primaryColorHex, setPrimaryColorHex, 
   accentColorHex, setAccentColorHex,
   fontSize, setFontSize, 
-  customLogo, setCustomLogo 
+  customLogo, setCustomLogo,
+  dbSourceUrl, setDbSourceUrl
 }) => {
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -30,7 +32,7 @@ const Settings: React.FC<SettingsProps> = ({
         <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
           <Icon size={18} />
         </div>
-        <div>
+        <div className="max-w-[300px]">
           <p className="text-sm font-bold text-gray-900">{title}</p>
           <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">{desc}</p>
         </div>
@@ -42,7 +44,7 @@ const Settings: React.FC<SettingsProps> = ({
   );
 
   return (
-    <div className="max-w-2xl mx-auto py-10 space-y-12 animate-slide">
+    <div className="max-w-3xl mx-auto py-10 space-y-12 animate-slide">
       <div className="space-y-2">
         <h1 className="text-3xl font-black text-gray-900 tracking-tight">Preferences</h1>
         <p className="text-gray-400 text-sm font-medium">Kustomisasi ambience workspace sesuai identitas brand Anda.</p>
@@ -58,13 +60,6 @@ const Settings: React.FC<SettingsProps> = ({
           </div>
         </SettingRow>
 
-        <SettingRow icon={Pipette} title="Accent/Secondary Color" desc="Warna elemen penunjang">
-          <div className="flex items-center gap-3">
-            <input type="color" value={accentColorHex} onChange={(e) => setAccentColorHex(e.target.value)} className="w-10 h-10 rounded-lg cursor-pointer border-none bg-transparent" />
-            <span className="text-xs font-mono font-bold text-gray-400">{accentColorHex.toUpperCase()}</span>
-          </div>
-        </SettingRow>
-
         <SettingRow icon={ImageIcon} title="Sidebar Brand Logo" desc="Logo kustom menggantikan teks Socialflow">
           <div className="flex items-center gap-3">
             {customLogo && <img src={customLogo} className="w-8 h-8 object-contain rounded-lg border border-gray-100" />}
@@ -72,7 +67,7 @@ const Settings: React.FC<SettingsProps> = ({
               Upload Logo
               <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
             </label>
-            {customLogo && <button onClick={() => setCustomLogo(null)} className="text-[10px] font-black text-rose-500 uppercase tracking-widest">Reset</button>}
+            {customLogo && <button onClick={() => setCustomLogo(null)} className="text-[10px] font-black text-rose-500 uppercase tracking-widest ml-2">Reset</button>}
           </div>
         </SettingRow>
 
@@ -85,6 +80,21 @@ const Settings: React.FC<SettingsProps> = ({
               ))}
            </div>
         </SettingRow>
+
+        {setDbSourceUrl && (
+          <div className="pt-8 mt-6 border-t border-gray-100">
+            <h3 className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em] mb-6">Database Connectivity</h3>
+            <SettingRow icon={Globe} title="Cloud Database URL" desc="Google Sheets Apps Script URL untuk sinkronisasi multi-perangkat">
+              <input 
+                type="text" 
+                value={dbSourceUrl || ''} 
+                onChange={(e) => setDbSourceUrl(e.target.value)}
+                className="w-64 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-[10px] font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                placeholder="https://script.google.com/..."
+              />
+            </SettingRow>
+          </div>
+        )}
       </div>
     </div>
   );

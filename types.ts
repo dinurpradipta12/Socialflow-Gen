@@ -37,15 +37,16 @@ export interface User {
   socialMedia?: string;
   birthDate?: string;
   settings?: UserSettings;
-  workspaceId?: string; // Melacak workspace mana yang diikuti user
+  workspaceId?: string;
 }
 
 export interface UserSettings {
-  primaryColor: string; // Hex color
-  accentColor: string;  // Hex color
+  primaryColor: string;
+  accentColor: string;
   fontSize: 'small' | 'medium' | 'large';
   darkMode: boolean;
   appLogo?: string;
+  dbSourceUrl?: string; // URL Google Sheets atau External DB
 }
 
 export interface SystemNotification {
@@ -109,7 +110,7 @@ export interface Workspace {
   color: ThemeColor;
   members: User[];
   inviteCode: string;
-  ownerId: string; // Pemilik workspace
+  ownerId: string;
 }
 
 export interface ContentItem {
