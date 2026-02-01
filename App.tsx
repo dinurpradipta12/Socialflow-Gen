@@ -42,7 +42,7 @@ const App: React.FC = () => {
   const [showSystemNotifs, setShowSystemNotifs] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
 
-  // EMPTY login fields as requested
+  // Field login kosong saat pertama kali tampil
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -60,7 +60,7 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      // Logic for Developer Mode Bypass
+      // Prioritas 1: Cek Kredensial Developer
       if (email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password) {
         const devUser = allUsers.find(u => u.role === 'developer');
         if (devUser) {
@@ -71,16 +71,15 @@ const App: React.FC = () => {
         }
       }
 
-      // Check in the dynamic approved user list
+      // Prioritas 2: Cek di database user (termasuk yang baru di-approve)
       const loggedInUser = allUsers.find(u => u.email === email);
       
+      // Catatan: Karena ini sistem mock, kita asumsikan password valid jika user ditemukan
       if (loggedInUser) {
-        // Simple logic for password checking (in real app, use hashing)
-        // Since it's a mock, we allow entry if user exists
         setUser(loggedInUser);
         setAuthState('authenticated');
       } else {
-        alert('Akses Ditolak: Akun tidak ditemukan, belum diverifikasi developer, atau password salah.');
+        alert('Akses Ditolak: Akun tidak ditemukan atau belum disetujui oleh Developer. Pastikan email dan password benar.');
       }
       setLoading(false);
     }, 1200);
@@ -98,8 +97,11 @@ const App: React.FC = () => {
         timestamp: new Date().toLocaleString(),
         status: 'pending'
       };
+      
+      // Simpan ke database pendaftaran (agar muncul di Dev Portal)
       setRegistrations(prev => [newReg, ...prev]);
-      alert(`Pendaftaran berhasil dikirim! Silakan hubungi developer (dev@snaillabs.id) untuk aktivasi lisensi.`);
+      
+      alert(`Pendaftaran berhasil! Data Anda telah dikirim ke tim Developer. Silakan tunggu verifikasi agar dapat login.`);
       setAuthState('login');
       setLoading(false);
       setRegName(''); setRegEmail(''); setRegPassword('');
@@ -112,6 +114,7 @@ const App: React.FC = () => {
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
       if (reg) {
+        // Buat user baru di database aplikasi
         const newUser: User = {
           id: (allUsers.length + 1).toString(),
           name: reg.name,
@@ -130,7 +133,7 @@ const App: React.FC = () => {
           },
           isSubscribed: true,
           subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          jobdesk: 'Social Media Editor',
+          jobdesk: 'Social Media Specialist',
           kpi: [],
           activityLogs: [],
           performanceScore: 0
@@ -146,7 +149,6 @@ const App: React.FC = () => {
 
   const handleSendMessage = (text: string) => {
     setMessages(prev => [...prev, { id: Date.now().toString(), senderId: user!.id, text, timestamp: new Date().toISOString() }]);
-    // Simulate typing indicator
     setTimeout(() => {
       setIsOtherUserTyping(true);
       setTimeout(() => {
@@ -154,11 +156,11 @@ const App: React.FC = () => {
         setMessages(prev => [...prev, { 
           id: (Date.now() + 1).toString(), 
           senderId: 'dev-1', 
-          text: 'Kami telah menerima pesan Anda. Tim developer akan segera memproses permintaan ini.', 
+          text: 'Pesan Anda telah kami terima. Tim Socialflow akan segera memprosesnya.', 
           timestamp: new Date().toISOString() 
         }]);
-      }, 3000);
-    }, 1000);
+      }, 2500);
+    }, 800);
   };
 
   const handleLogout = () => {

@@ -23,8 +23,8 @@ const FULL_PERMISSIONS: Permissions = {
 };
 
 export const DEV_CREDENTIALS = {
-  email: 'dev@snaillabs.id',
-  password: 'dev_snaillabs_2025'
+  email: 'cs.socialflow@gmail.com',
+  password: 'Dinur@12345'
 };
 
 export const MOCK_USERS: User[] = [
@@ -46,7 +46,7 @@ export const MOCK_USERS: User[] = [
   },
   { 
     id: 'dev-1', 
-    name: 'Snaillabs Dev', 
+    name: 'Socialflow Dev', 
     email: DEV_CREDENTIALS.email, 
     role: 'developer', 
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=dev',
