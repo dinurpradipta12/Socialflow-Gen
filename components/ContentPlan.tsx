@@ -19,6 +19,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Maintain all original fields
   const [formData, setFormData] = useState<{
     title: string;
     value: string;
@@ -58,18 +59,18 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   };
 
   const handleAnalyzeLink = async (item: ContentPlanItem) => {
-    if (!item.postLink) {
-      alert("Masukkan link postingan terlebih dahulu.");
+    if (!item.postLink || item.postLink === '' || item.postLink === '#') {
+      alert("Masukkan link postingan yang valid terlebih dahulu.");
       return;
     }
     setIsAnalyzing(true);
     try {
       const insight = await scrapePostInsights(item.postLink);
       onSaveInsight({ ...insight, sourceType: 'plan' });
-      alert("Analisis berhasil! Data telah dimasukkan ke Database Analitik.");
+      alert("Analisis berhasil! Data performa telah disinkronkan ke halaman Analitik.");
     } catch (err) {
       console.error(err);
-      alert("Gagal melakukan scrapping.");
+      alert("Gagal melakukan scrapping. Pastikan link dapat diakses publik.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -79,10 +80,10 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     <div className="space-y-6 animate-slide">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black dark:text-white">Konten Plan</h1>
+          <h1 className="text-3xl font-black dark:text-white tracking-tight">Konten Plan</h1>
           <p className="text-gray-400 dark:text-slate-500 font-medium">Strategi & Manajemen Konten Snaillabs.</p>
         </div>
-        <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="px-6 py-3 bg-[var(--primary-color)] text-white rounded-2xl font-bold shadow-xl active:scale-95 flex items-center gap-2">
+        <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="px-6 py-3 bg-[var(--primary-color)] text-white rounded-2xl font-bold shadow-xl active:scale-95 flex items-center gap-2 transition-all">
            <Plus size={20} /> Tambah Plan
         </button>
       </div>
@@ -102,12 +103,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1">Judul Posting</label>
-                       <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700 focus:border-[var(--primary-color)]" />
+                       <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700 focus:border-[var(--primary-color)] transition-all" />
                     </div>
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1">Status Plan</label>
                        <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700">
-                          {INITIAL_STATUS_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                          {INITIAL_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                        </select>
                     </div>
                  </div>
@@ -115,21 +116,21 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1">Konten Pilar</label>
-                       <input value={formData.pillar} onChange={e => setFormData({...formData, pillar: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="Contoh: Edukasi, Promo..." />
+                       <input value={formData.pillar} onChange={e => setFormData({...formData, pillar: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="Edukasi, Promo, dll" />
                     </div>
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1">Tipe Konten</label>
-                       <input value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="Contoh: Reels, Carousel..." />
+                       <input value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="Reels, Carousel, dll" />
                     </div>
                  </div>
 
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2"><FileText size={12}/> Script URL (Google Docs)</label>
-                       <input value={formData.scriptUrl} onChange={e => setFormData({...formData, scriptUrl: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="https://..." />
+                       <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2"><FileText size={12}/> Script URL</label>
+                       <input value={formData.scriptUrl} onChange={e => setFormData({...formData, scriptUrl: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="Link Docs/Script" />
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2"><UserPlus size={12}/> Approval By</label>
+                       <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2"><UserPlus size={12}/> Approved By</label>
                        <select value={formData.approvedBy} onChange={e => setFormData({...formData, approvedBy: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700">
                           <option value="">Pilih Approval</option>
                           {MOCK_USERS.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
@@ -140,11 +141,11 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2"><ImageIcon size={12}/> Visual URL / Asset</label>
-                       <input value={formData.visualUrl} onChange={e => setFormData({...formData, visualUrl: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="Link canva/folder..." />
+                       <input value={formData.visualUrl} onChange={e => setFormData({...formData, visualUrl: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="Link Asset/Canva" />
                     </div>
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2"><LinkIcon size={12}/> Post Live Link (Untuk Tracker)</label>
-                       <input value={formData.postLink} onChange={e => setFormData({...formData, postLink: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="https://..." />
+                       <label className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest ml-1 flex items-center gap-2"><LinkIcon size={12}/> Post Live Link</label>
+                       <input value={formData.postLink} onChange={e => setFormData({...formData, postLink: e.target.value})} className="w-full px-5 py-4 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white border border-gray-100 dark:border-slate-700" placeholder="https://instagram.com/p/..." />
                     </div>
                  </div>
 
@@ -155,7 +156,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
                  <div className="flex gap-4 pt-4 sticky bottom-0 bg-white dark:bg-slate-900 pb-2">
                     <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-black uppercase text-[10px] tracking-widest rounded-2xl active:scale-95 transition-all">Batal</button>
-                    <button type="submit" className="flex-[2] py-5 bg-[var(--primary-color)] text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all">Simpan Perencanaan</button>
+                    <button type="submit" className="flex-[2] py-5 bg-[var(--primary-color)] text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl active:scale-95 transition-all">Simpan Perencanaan</button>
                  </div>
               </form>
            </div>
@@ -183,48 +184,52 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                         </td>
                         <td className="px-8 py-6 text-sm font-bold dark:text-white">{item.title}</td>
                         <td className="px-8 py-6 text-center">
-                           <div className="p-2 text-gray-300 dark:text-slate-600 group-hover:text-gray-900">{expandedId === item.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
+                           <div className="p-2 text-gray-300 dark:text-slate-600 group-hover:text-gray-900 transition-all">{expandedId === item.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
                         </td>
                      </tr>
                      {expandedId === item.id && (
-                        <tr className="bg-gray-50/30 dark:bg-slate-800/10">
+                        <tr className="bg-gray-50/30 dark:bg-slate-800/10 animate-slide">
                            <td colSpan={3} className="px-10 py-8">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-10 animate-slide">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
                                  <div className="md:col-span-2 space-y-4">
                                     <h4 className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Informasi Strategis</h4>
                                     <div className="grid grid-cols-2 gap-6 text-xs font-bold">
-                                       <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-800">
+                                       <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
                                           <p className="text-[9px] text-gray-400 uppercase tracking-widest mb-1">Pilar / Value</p>
                                           <p className="dark:text-white">{item.pillar} • {item.value}</p>
                                        </div>
-                                       <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-800">
+                                       <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
                                           <p className="text-[9px] text-gray-400 uppercase tracking-widest mb-1">Approval</p>
-                                          <p className="dark:text-white">{item.approvedBy || 'No approval needed'}</p>
+                                          <p className="dark:text-white">{item.approvedBy || 'Menunggu Review'}</p>
                                        </div>
                                     </div>
-                                    <div className="p-6 bg-white dark:bg-slate-800 rounded-[2rem] border border-gray-100 dark:border-slate-800">
+                                    <div className="p-6 bg-white dark:bg-slate-800 rounded-[2rem] border border-gray-100 dark:border-slate-800 shadow-sm">
                                        <p className="text-[9px] text-gray-400 uppercase tracking-widest mb-2">Brief Deskripsi</p>
-                                       <p className="text-gray-600 dark:text-slate-400 leading-relaxed font-medium">{item.description || 'Tidak ada brief.'}</p>
+                                       <p className="text-gray-600 dark:text-slate-400 leading-relaxed font-medium">{item.description || 'Tidak ada brief deskripsi tersedia.'}</p>
                                     </div>
                                  </div>
                                  <div className="flex flex-col gap-3 min-w-[240px]">
                                     <button 
                                        onClick={() => openEditModal(item)}
-                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-gray-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all"
+                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-gray-900 dark:bg-slate-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all"
                                     >
                                        <Edit2 size={16}/> Edit Perencanaan
                                     </button>
                                     <button 
                                        onClick={() => handleAnalyzeLink(item)}
                                        disabled={isAnalyzing}
-                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-[var(--primary-color)] rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-gray-50 dark:hover:bg-slate-700 active:scale-95 transition-all"
+                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 text-[var(--primary-color)] rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-gray-50 active:scale-95 transition-all"
                                     >
                                        {isAnalyzing ? <Loader2 size={16} className="animate-spin"/> : <BarChart2 size={16}/>}
                                        Analyze Tracker
                                     </button>
                                     <div className="mt-4 p-4 border-t border-gray-100 dark:border-slate-800 flex flex-col gap-2">
-                                       <a href={item.scriptUrl} target="_blank" className="text-[10px] font-black text-blue-600 uppercase flex items-center gap-2 hover:underline"><FileText size={12}/> View Script</a>
-                                       <a href={item.visualUrl} target="_blank" className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 hover:underline"><ImageIcon size={12}/> View Assets</a>
+                                       {item.scriptUrl && item.scriptUrl !== '#' && (
+                                         <a href={item.scriptUrl} target="_blank" className="text-[10px] font-black text-blue-600 uppercase flex items-center gap-2 hover:underline"><FileText size={12}/> View Script</a>
+                                       )}
+                                       {item.visualUrl && item.visualUrl !== '#' && (
+                                         <a href={item.visualUrl} target="_blank" className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 hover:underline"><ImageIcon size={12}/> View Assets</a>
+                                       )}
                                     </div>
                                  </div>
                               </div>

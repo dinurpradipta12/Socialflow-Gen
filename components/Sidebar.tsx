@@ -46,9 +46,11 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
   const isDev = user.role === 'developer';
 
   return (
-    <div className="w-72 h-screen bg-white dark:bg-slate-900 border-r border-gray-100 dark:border-slate-800 flex flex-col fixed left-0 top-0 z-50 overflow-hidden shadow-2xl transition-all duration-300">
+    <div className={`w-72 h-screen border-r flex flex-col fixed left-0 top-0 z-50 overflow-hidden shadow-2xl transition-all duration-300 ${
+      darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-gray-100'
+    }`}>
       <div className="p-6 flex flex-col h-full">
-        {/* Logo Section */}
+        {/* Logo Section - Hides SF text if logo exists */}
         <div className="flex items-center gap-3 mb-6 min-h-[48px]">
           {appLogo ? (
             <img src={appLogo} alt="Workspace Logo" className="w-full h-12 object-contain" />
@@ -57,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
               <div className="w-10 h-10 rounded-xl bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl shadow-lg">
                 SF
               </div>
-              <div>
+              <div className="animate-slide">
                 <h1 className="font-black text-gray-900 dark:text-white text-sm leading-tight tracking-tight">Socialflow</h1>
                 <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-none mt-0.5">by Snaillabs.id</p>
               </div>
@@ -107,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
             <button
               onClick={() => setActiveTab('devPortal')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all mt-4 border border-blue-100 dark:border-slate-800 ${
-                activeTab === 'devPortal' ? 'bg-gray-900 text-white' : 'text-blue-600 bg-blue-50/30 dark:bg-slate-800/30 hover:bg-blue-50'
+                activeTab === 'devPortal' ? 'bg-gray-900 text-white shadow-xl' : 'text-blue-600 bg-blue-50/30 dark:bg-slate-800/30 hover:bg-blue-50'
               }`}
             >
               <Database size={18} />

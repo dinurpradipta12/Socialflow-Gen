@@ -60,4 +60,38 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
           <div className="h-80 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data}>
-                <CartesianGrid stroke
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} />
+                <Tooltip cursor={{fill: 'rgba(0,0,0,0.02)'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' }} />
+                <Bar dataKey="engagement" fill={colorSet.text.replace('text-', '#').replace('600', '400')} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="reach" fill="#e2e8f0" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[3rem] shadow-sm border border-gray-100 dark:border-slate-800">
+          <h3 className="text-xl font-black text-gray-900 dark:text-white mb-8">Upcoming Content</h3>
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center gap-4 p-4 rounded-3xl border border-gray-50 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all cursor-pointer">
+                <div className={`w-12 h-12 rounded-2xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center ${colorSet.text}`}>
+                  <CalendarIcon size={24} />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-black text-gray-900 dark:text-white text-xs uppercase tracking-tight">Campaign Reveal #{i}</h4>
+                  <p className="text-[10px] text-gray-400 dark:text-slate-500 font-bold mt-0.5">Oct 28, 2023 • 10:00 AM</p>
+                </div>
+                <span className="px-3 py-1 bg-amber-50 dark:bg-amber-950/20 text-amber-600 text-[8px] font-black uppercase tracking-widest rounded-lg">Wait</span>
+              </div>
+            ))}
+          </div>
+          <button className={`w-full mt-6 py-4 rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-800 text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-600 hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-all`}>View Full Calendar</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;

@@ -85,7 +85,7 @@ const App: React.FC = () => {
     setUser(null);
   };
 
-  // Safe check to prevent "Cannot read property of null"
+  // Safe check to prevent "Cannot read property of null" during login phase
   if (authState !== 'authenticated' || !user) {
     return (
       <div className="min-h-screen bg-[#fcfcfd] flex items-center justify-center p-6 overflow-hidden">
@@ -115,6 +115,7 @@ const App: React.FC = () => {
   const fontSizeClass = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-lg' : 'text-sm';
 
   const renderContent = () => {
+    // Developer bypasses restriction to settings and dev portal
     if (activeTab === 'settings' && !isDev && user.role !== 'admin' && user.role !== 'superuser') {
       return (
         <div className="min-h-[80vh] flex flex-col items-center justify-center p-10 bg-white dark:bg-slate-900 rounded-[3rem]">
@@ -189,7 +190,7 @@ const App: React.FC = () => {
         {showSystemNotifs && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-xl p-6">
             <div className="absolute inset-0" onClick={() => setShowSystemNotifs(false)}></div>
-            <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+            <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl border border-gray-100 dark:border-slate-800 overflow-hidden animate-slide">
               <div className="p-8 border-b border-gray-50 dark:border-slate-800 flex justify-between items-center">
                 <h3 className="text-xl font-black dark:text-white">Notifikasi</h3>
                 <button onClick={() => setShowSystemNotifs(false)} className="p-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl"><X size={20}/></button>
