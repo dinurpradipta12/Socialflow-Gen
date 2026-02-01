@@ -17,7 +17,6 @@ import ChatPopup from './components/ChatPopup';
 import TopNotification from './components/TopNotification';
 import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 
-// Completed the App component with missing authentication logic, render routing, and default export.
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('sf_session_user');
@@ -67,32 +66,34 @@ const App: React.FC = () => {
   const prevRegCount = useRef(registrations.length);
   const isDev = user?.role === 'developer';
 
-  // LOGIKA FETCH DATA DARI GOOGLE SHEETS
+  /**
+   * CRITICAL: Google Apps Script fetch handling.
+   * "Failed to fetch" usually occurs due to CORS preflight (OPTIONS) failing.
+   * We must use "Simple Requests" (no custom headers) to avoid preflight.
+   */
   const syncWithCloud = useCallback(async (isManual = false) => {
     if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) {
-      if (isManual) alert("URL Apps Script tidak valid. Pastikan menggunakan link /exec.");
+      if (isManual) alert("URL Database tidak valid. Gunakan link deployment Apps Script (/exec).");
       return;
     }
     if (!isManual && isSyncing) return;
 
     setIsSyncing(true);
     setSyncError(null);
+
     try {
-      const fetchUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}action=getRegistrations&t=${Date.now()}`;
+      // Use URL parameter for action to keep it as a Simple GET Request
+      const fetchUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}action=getRegistrations&_t=${Date.now()}`;
+      
       const res = await fetch(fetchUrl, {
         method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
+        mode: 'cors', // Ensure CORS is requested
+        redirect: 'follow', // Crucial for Google Apps Script redirects
+        // DO NOT add custom headers here to avoid OPTIONS preflight
       });
       
       if (!res.ok) {
-        throw new Error(`Koneksi Gagal (${res.status})`);
-      }
-
-      const contentType = res.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error("Respon bukan JSON. Pastikan akses diatur ke 'Anyone'.");
+        throw new Error(`HTTP Error: ${res.status}`);
       }
 
       const cloudData = await res.json();
@@ -106,12 +107,23 @@ const App: React.FC = () => {
           if (newest) setDevNotif(newest);
         }
         prevRegCount.current = cloudData.length;
+        if (isManual) console.log("Cloud Sync Success");
+      } else if (cloudData.error) {
+        throw new Error(cloudData.error);
       }
     } catch (err: any) {
-      const msg = err.message || "Gagal mengambil data.";
+      console.error("Sync Error Details:", err);
+      const msg = err.message || "Network Error";
       setSyncError(msg);
+      
       if (isManual) {
-        alert("Sync Error: " + msg + "\n\nSolusi:\n1. Pastikan Apps Script di-deploy sebagai 'Web App'.\n2. Atur 'Who has access' ke 'Anyone'.\n3. Gunakan URL yang diakhiri /exec.");
+        alert(
+          `Gagal Sinkronisasi: ${msg}\n\n` +
+          `Pastikan:\n` +
+          `1. Link diakhiri dengan /exec\n` +
+          `2. Deployment diset ke "Anyone" (Siapa Saja)\n` +
+          `3. Anda sudah meng-Authorize script di Google Cloud.`
+        );
       }
     } finally {
       setIsSyncing(false);
@@ -121,7 +133,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (dbSourceUrl) {
       syncWithCloud();
-      const interval = setInterval(() => syncWithCloud(), 30000);
+      const interval = setInterval(() => syncWithCloud(), 60000); // Polling every minute
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud]);
@@ -133,6 +145,7 @@ const App: React.FC = () => {
 
     if (dbSourceUrl) {
       try {
+        // Use no-cors for POST if we don't need to read the response, avoids preflight
         await fetch(dbSourceUrl, {
           method: 'POST',
           mode: 'no-cors',
@@ -226,16 +239,18 @@ const App: React.FC = () => {
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: formData.toString()
         });
-        alert('Pendaftaran terkirim ke Cloud! Menunggu verifikasi admin.');
+        alert('Permintaan pendaftaran terkirim! Admin akan memverifikasi akun Anda.');
       } catch (e) {
         console.error("Cloud Register Fail", e);
+        alert('Gagal mengirim ke Cloud. Mencoba penyimpanan lokal...');
       }
-    } else {
-      const updatedRegs = [...registrations, newReg];
-      setRegistrations(updatedRegs);
-      localStorage.setItem('sf_registrations_db', JSON.stringify(updatedRegs));
-      alert('Pendaftaran terkirim! (Mode Lokal)');
     }
+
+    // Always fallback to local storage for UX
+    const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
+    const updated = [newReg, ...current];
+    localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
+    setRegistrations(updated);
 
     setLoading(false);
     setAuthState('login');
