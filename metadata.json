@@ -1,0 +1,8 @@
+{
+  "name": "Socialflow Analyze Tracker",
+  "description": "Socialflow Analyze Tracker by Snaillabs.id - A comprehensive social media planner and analytics tool with advanced team management and AI-powered Indonesian insights.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
