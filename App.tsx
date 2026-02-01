@@ -31,41 +31,38 @@ const App: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<PostInsight[]>([]);
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
   
-  // App-level Persistence Simulation
+  // DATABASE PERSISTENCE (LocalStorage)
   const [allUsers, setAllUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('sf_users');
+    const saved = localStorage.getItem('sf_users_db');
     return saved ? JSON.parse(saved) : MOCK_USERS;
   });
   
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>(() => {
-    const saved = localStorage.getItem('sf_registrations');
+    const saved = localStorage.getItem('sf_registrations_db');
     return saved ? JSON.parse(saved) : MOCK_REGISTRATIONS;
   });
 
   const [user, setUser] = useState<User | null>(null);
-
   const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [systemNotifications, setSystemNotifications] = useState<SystemNotification[]>([]);
   const [showSystemNotifs, setShowSystemNotifs] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
 
-  // Field login kosong saat pertama kali tampil
+  // Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-
-  // Registration states
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
 
-  // Sync state to localStorage to prevent data loss on refresh
+  // Sync to Storage on changes
   useEffect(() => {
-    localStorage.setItem('sf_users', JSON.stringify(allUsers));
+    localStorage.setItem('sf_users_db', JSON.stringify(allUsers));
   }, [allUsers]);
 
   useEffect(() => {
-    localStorage.setItem('sf_registrations', JSON.stringify(registrations));
+    localStorage.setItem('sf_registrations_db', JSON.stringify(registrations));
   }, [registrations]);
 
   useEffect(() => {
@@ -77,7 +74,7 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      // Prioritas 1: Cek Kredensial Developer Baru
+      // 1. Cek Kredensial Developer Utama
       if (email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password) {
         const devUser = allUsers.find(u => u.role === 'developer');
         if (devUser) {
@@ -88,17 +85,16 @@ const App: React.FC = () => {
         }
       }
 
-      // Prioritas 2: Cek di database user (termasuk pendaftar yang sudah di-approve)
+      // 2. Cek Akun User di Database (Yang sudah di-approve)
       const loggedInUser = allUsers.find(u => u.email === email);
       
       if (loggedInUser && loggedInUser.isSubscribed) {
-        // Mock password check
         setUser(loggedInUser);
         setAuthState('authenticated');
       } else if (loggedInUser && !loggedInUser.isSubscribed) {
-        alert('Akun Anda sedang diblokir atau lisensi telah habis. Hubungi Developer.');
+        alert('Akses Dibatasi: Akun Anda sedang dinonaktifkan. Hubungi Developer.');
       } else {
-        alert('Akses Ditolak: Akun tidak ditemukan atau belum diverifikasi. Silakan hubungi cs.socialflow@gmail.com.');
+        alert('Akses Ditolak: Akun tidak ditemukan atau belum diverifikasi oleh Developer. Pastikan Anda sudah mendaftar dan disetujui.');
       }
       setLoading(false);
     }, 1200);
@@ -109,17 +105,20 @@ const App: React.FC = () => {
     setLoading(true);
     setTimeout(() => {
       const newReg: RegistrationRequest = {
-        id: Date.now().toString(),
+        id: `REG-${Date.now()}`,
         name: regName,
         email: regEmail,
-        password: regPassword, // In real app, hash this
+        password: regPassword,
         timestamp: new Date().toLocaleString('id-ID'),
         status: 'pending'
       };
       
-      setRegistrations(prev => [newReg, ...prev]);
+      const updatedRegs = [newReg, ...registrations];
+      setRegistrations(updatedRegs);
+      // Force immediate save
+      localStorage.setItem('sf_registrations_db', JSON.stringify(updatedRegs));
       
-      alert(`Pendaftaran Berhasil! Data Anda telah tersimpan di sistem. Developer akan memverifikasi akun Anda segera. Silakan login kembali nanti.`);
+      alert(`Pendaftaran Berhasil! Halo ${regName}, data Anda telah masuk ke sistem Developer. Silakan tunggu verifikasi agar dapat login menggunakan email ${regEmail}.`);
       setAuthState('login');
       setLoading(false);
       setRegName(''); setRegEmail(''); setRegPassword('');
@@ -127,7 +126,8 @@ const App: React.FC = () => {
   };
 
   const handleRegistrationAction = (regId: string, status: 'approved' | 'rejected') => {
-    setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
+    const updatedRegs = registrations.map(r => r.id === regId ? { ...r, status } : r);
+    setRegistrations(updatedRegs);
     
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
@@ -143,7 +143,7 @@ const App: React.FC = () => {
           },
           isSubscribed: true,
           subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          jobdesk: 'Social Media Specialist',
+          jobdesk: 'Social Media Expert',
           kpi: [], activityLogs: [], performanceScore: 0
         };
         setAllUsers(prev => [...prev, newUser]);
@@ -164,10 +164,10 @@ const App: React.FC = () => {
         setMessages(prev => [...prev, { 
           id: (Date.now() + 1).toString(), 
           senderId: 'dev-1', 
-          text: 'Halo! Developer di sini. Kami sedang meninjau permintaan Anda.', 
+          text: 'Halo! Kami dari tim Socialflow. Pesan Anda sedang kami tinjau.', 
           timestamp: new Date().toISOString() 
         }]);
-      }, 2500);
+      }, 3000);
     }, 800);
   };
 
@@ -196,7 +196,7 @@ const App: React.FC = () => {
                 <div className="space-y-3">
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-400 transition-colors" size={16} />
-                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email Address" />
+                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email Developer/User" />
                   </div>
                   <div className="relative group">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-400 transition-colors" size={16} />
@@ -217,7 +217,7 @@ const App: React.FC = () => {
           ) : (
             <form onSubmit={handleRegister} className="space-y-4 animate-slide">
                <div className="space-y-3">
-                  <input type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Nama Lengkap" />
+                  <input type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Nama Lengkap / Username" />
                   <input type="email" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email" />
                   <div className="relative">
                     <input type={showPassword ? "text" : "password"} required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm pr-12" placeholder="Password" />
@@ -225,7 +225,7 @@ const App: React.FC = () => {
                   </div>
                </div>
                <button type="submit" disabled={loading} className="w-full py-4 bg-purple-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-purple-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-100">
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <>Daftar Akses Tim <UserPlus size={14} /></>}
+                  {loading ? <Loader2 size={16} className="animate-spin" /> : <>Kirim Permintaan Akses <UserPlus size={14} /></>}
                 </button>
                 <div className="text-center pt-2">
                   <button onClick={() => setAuthState('login')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-purple-400 transition-colors">Sudah punya akun? Kembali login</button>
@@ -288,25 +288,6 @@ const App: React.FC = () => {
              </div>
           </div>
         </header>
-        {showSystemNotifs && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
-            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setShowSystemNotifs(false)}></div>
-            <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-100 overflow-hidden animate-slide">
-              <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
-                <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Notifikasi</h3>
-                <button onClick={() => setShowSystemNotifs(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-all"><X size={18}/></button>
-              </div>
-              <div className="max-h-[50vh] overflow-y-auto p-6 space-y-3 custom-scrollbar">
-                {systemNotifications.length > 0 ? systemNotifications.map(n => (
-                  <div key={n.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                    <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{n.title}</p>
-                    <p className="text-[10px] text-gray-500 mt-1 font-medium">{n.message}</p>
-                  </div>
-                )) : <div className="text-center py-10"><p className="text-[10px] text-gray-200 font-black uppercase tracking-widest">Tidak ada pesan baru</p></div>}
-              </div>
-            </div>
-          </div>
-        )}
         <div className="max-w-6xl mx-auto">{renderContent()}</div>
       </main>
       <ChatPopup primaryColor={activeWorkspace.color} currentUser={user} messages={messages} onSendMessage={handleSendMessage} isOpen={isChatOpen} setIsOpen={setIsChatOpen} unreadCount={0} isTyping={isOtherUserTyping} />
