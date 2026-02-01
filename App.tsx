@@ -42,8 +42,9 @@ const App: React.FC = () => {
   const [showSystemNotifs, setShowSystemNotifs] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
 
-  const [email, setEmail] = useState('dev@snaillabs.id');
-  const [password, setPassword] = useState('dev_snaillabs_2025');
+  // EMPTY login fields as requested
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   // Registration states
   const [regName, setRegName] = useState('');
@@ -59,15 +60,27 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      let loggedInUser = allUsers.find(u => u.email === email);
+      // Logic for Developer Mode Bypass
       if (email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password) {
-        loggedInUser = allUsers.find(u => u.role === 'developer');
+        const devUser = allUsers.find(u => u.role === 'developer');
+        if (devUser) {
+          setUser(devUser);
+          setAuthState('authenticated');
+          setLoading(false);
+          return;
+        }
       }
+
+      // Check in the dynamic approved user list
+      const loggedInUser = allUsers.find(u => u.email === email);
+      
       if (loggedInUser) {
+        // Simple logic for password checking (in real app, use hashing)
+        // Since it's a mock, we allow entry if user exists
         setUser(loggedInUser);
         setAuthState('authenticated');
       } else {
-        alert('Akses Ditolak: Akun tidak ditemukan atau periksa kembali password Anda.');
+        alert('Akses Ditolak: Akun tidak ditemukan, belum diverifikasi developer, atau password salah.');
       }
       setLoading(false);
     }, 1200);
@@ -81,6 +94,7 @@ const App: React.FC = () => {
         id: Date.now().toString(),
         name: regName,
         email: regEmail,
+        password: regPassword,
         timestamp: new Date().toLocaleString(),
         status: 'pending'
       };
@@ -94,6 +108,7 @@ const App: React.FC = () => {
 
   const handleRegistrationAction = (regId: string, status: 'approved' | 'rejected') => {
     setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
+    
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
       if (reg) {
@@ -104,12 +119,21 @@ const App: React.FC = () => {
           role: 'editor',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.email}`,
           permissions: {
-            dashboard: true, calendar: true, ads: true, analytics: true, tracker: true, team: true, settings: false, contentPlan: true,
+            dashboard: true,
+            calendar: true,
+            ads: true,
+            analytics: true,
+            tracker: true,
+            team: true,
+            settings: false,
+            contentPlan: true,
           },
           isSubscribed: true,
           subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           jobdesk: 'Social Media Editor',
-          kpi: [], activityLogs: [], performanceScore: 0
+          kpi: [],
+          activityLogs: [],
+          performanceScore: 0
         };
         setAllUsers(prev => [...prev, newUser]);
       }
@@ -130,16 +154,18 @@ const App: React.FC = () => {
         setMessages(prev => [...prev, { 
           id: (Date.now() + 1).toString(), 
           senderId: 'dev-1', 
-          text: 'Pesan diterima! Kami akan segera meninjau progress konten tersebut.', 
+          text: 'Kami telah menerima pesan Anda. Tim developer akan segera memproses permintaan ini.', 
           timestamp: new Date().toISOString() 
         }]);
-      }, 2000);
+      }, 3000);
     }, 1000);
   };
 
   const handleLogout = () => {
     setAuthState('login');
     setUser(null);
+    setEmail('');
+    setPassword('');
   };
 
   if (authState !== 'authenticated' || !user) {
@@ -147,55 +173,94 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 font-['Inter']">
         <div className="max-w-[400px] w-full bg-white rounded-[2rem] shadow-[0_40px_80px_-15px_rgba(0,0,0,0.05)] p-10 space-y-8 border border-gray-100 z-10 animate-slide">
           <div className="text-center space-y-4">
-            <div className="w-14 h-14 bg-blue-100 text-blue-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black shadow-sm">SF</div>
+            <div className="w-14 h-14 bg-blue-100 text-blue-500 rounded-2xl mx-auto flex items-center justify-center text-2xl font-black shadow-sm">
+              SF
+            </div>
             <div>
               <h1 className="text-xl font-black text-gray-900">Socialflow Workspace</h1>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Snaillabs Analyze Tracker</p>
             </div>
           </div>
+
           {authState === 'login' ? (
             <>
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-3">
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-400 transition-colors" size={16} />
-                    <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email Address" />
+                    <input 
+                      type="email" required value={email} onChange={(e) => setEmail(e.target.value)} 
+                      className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
+                      placeholder="Email Address" 
+                    />
                   </div>
                   <div className="relative group">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-400 transition-colors" size={16} />
-                    <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Password" />
+                    <input 
+                      type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} 
+                      className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
+                      placeholder="Password" 
+                    />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-900 transition-colors">
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                 </div>
-                <button type="submit" disabled={loading} className="w-full py-4 bg-blue-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-blue-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-100">
+
+                <button 
+                  type="submit" disabled={loading} 
+                  className="w-full py-4 bg-blue-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-blue-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-100"
+                >
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <>Masuk Dashboard <ArrowRight size={14} /></>}
                 </button>
               </form>
               <div className="text-center pt-2">
-                <button onClick={() => setAuthState('register')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-400 transition-colors">Belum punya akses? Daftar di sini</button>
+                <button onClick={() => setAuthState('register')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-400 transition-colors">
+                  Belum punya akses? Daftar di sini
+                </button>
               </div>
             </>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4 animate-slide">
                <div className="space-y-3">
-                  <input type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Nama Lengkap" />
-                  <input type="email" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" placeholder="Email" />
+                  <input 
+                    type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} 
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
+                    placeholder="Nama Lengkap" 
+                  />
+                  <input 
+                    type="email" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} 
+                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
+                    placeholder="Email" 
+                  />
                   <div className="relative">
-                    <input type={showPassword ? "text" : "password"} required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm pr-12" placeholder="Password" />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-900 transition-colors">{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                    <input 
+                      type={showPassword ? "text" : "password"} required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} 
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm pr-12" 
+                      placeholder="Password" 
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-900 transition-colors">
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                </div>
-               <button type="submit" disabled={loading} className="w-full py-4 bg-purple-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-purple-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-100">
+               <button 
+                  type="submit" disabled={loading} 
+                  className="w-full py-4 bg-purple-400 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-purple-500 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-100"
+                >
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <>Daftar Akses Tim <UserPlus size={14} /></>}
                 </button>
                 <div className="text-center pt-2">
-                  <button onClick={() => setAuthState('login')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-purple-400 transition-colors">Sudah punya akun? Kembali login</button>
+                  <button onClick={() => setAuthState('login')} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-purple-400 transition-colors">
+                    Sudah punya akun? Kembali login
+                  </button>
                 </div>
             </form>
           )}
-          <div className="pt-4 text-center"><p className="text-[9px] text-gray-200 font-black uppercase tracking-widest">© 2025 SNAILLABS.ID</p></div>
+
+          <div className="pt-4 text-center">
+            <p className="text-[9px] text-gray-200 font-black uppercase tracking-widest">© 2025 SNAILLABS.ID</p>
+          </div>
         </div>
       </div>
     );
@@ -214,6 +279,7 @@ const App: React.FC = () => {
         </div>
       );
     }
+
     switch (activeTab) {
       case 'dashboard': return <Dashboard primaryColor={activeWorkspace.color} />;
       case 'contentPlan': return <ContentPlan onSaveInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} users={allUsers} />;
@@ -223,34 +289,62 @@ const App: React.FC = () => {
       case 'tracker': return <LinkTracker onSaveManualInsight={(i) => setAnalyticsData([i, ...analyticsData])} primaryColorHex={primaryColorHex} />;
       case 'team': return <Team primaryColor={activeWorkspace.color} currentUser={user} workspace={activeWorkspace} onUpdateWorkspace={updateWorkspace} addSystemNotification={(n) => setSystemNotifications([ {...n, id: Date.now().toString(), timestamp: new Date().toISOString(), read: false}, ...systemNotifications])} />;
       case 'profile': return <Profile user={user} primaryColor={activeWorkspace.color} setUser={setUser} />;
-      case 'settings': return <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex} fontSize={fontSize} setFontSize={setFontSize} customLogo={customLogo} setCustomLogo={setCustomLogo} />;
-      case 'devPortal': return isDev ? <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} /> : <Dashboard primaryColor={activeWorkspace.color} />;
+      case 'settings': return (
+        <Settings 
+          primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex}
+          accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex}
+          fontSize={fontSize} setFontSize={setFontSize}
+          customLogo={customLogo} setCustomLogo={setCustomLogo}
+        />
+      );
+      case 'devPortal': return isDev ? (
+        <DevPortal 
+          primaryColorHex={primaryColorHex} 
+          registrations={registrations} 
+          onRegistrationAction={handleRegistrationAction}
+          users={allUsers}
+          setUsers={setAllUsers}
+        />
+      ) : <Dashboard primaryColor={activeWorkspace.color} />;
       default: return <Dashboard primaryColor={activeWorkspace.color} />;
     }
   };
 
   return (
     <div className={`min-h-screen bg-[#FDFDFD] text-gray-900 ${fontSizeClass}`}>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} primaryColorHex={primaryColorHex} onLogout={handleLogout} user={user} appLogo={customLogo} />
+      <Sidebar 
+        activeTab={activeTab} setActiveTab={setActiveTab} 
+        primaryColorHex={primaryColorHex} onLogout={handleLogout}
+        user={user} appLogo={customLogo}
+      />
+
       <main className="ml-72 p-12 min-h-screen">
         <header className="flex justify-between items-center mb-10">
           <div className="flex items-center gap-4">
             <button onClick={() => setShowSystemNotifs(!showSystemNotifs)} className="p-3 rounded-2xl bg-white border border-gray-100 shadow-sm relative active:scale-90 transition-all">
               <Bell size={18} className="text-gray-400" />
-              {systemNotifications.filter(n => !n.read).length > 0 && <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-rose-300 rounded-full border-2 border-white"></div>}
+              {systemNotifications.filter(n => !n.read).length > 0 && (
+                <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-rose-300 rounded-full border-2 border-white"></div>
+              )}
             </button>
             <div>
               <h2 className="text-[9px] font-black text-gray-300 uppercase tracking-widest">{activeWorkspace.name}</h2>
-              <p className="text-xl font-black text-gray-900 capitalize tracking-tight mt-0.5">{activeTab.replace(/([A-Z])/g, ' $1')}</p>
+              <p className="text-xl font-black text-gray-900 capitalize tracking-tight mt-0.5">
+                {activeTab.replace(/([A-Z])/g, ' $1')}
+              </p>
             </div>
           </div>
+          
           <div className="hidden md:flex items-center gap-4">
              <div className="text-right">
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-end gap-1.5"><CheckCircle size={10} /> Active Member</p>
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-end gap-1.5">
+                  <CheckCircle size={10} /> Active Member
+                </p>
                 <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">ID: {user.id.padStart(4, '0')}</p>
              </div>
           </div>
         </header>
+
         {showSystemNotifs && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setShowSystemNotifs(false)}></div>
@@ -265,14 +359,27 @@ const App: React.FC = () => {
                     <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{n.title}</p>
                     <p className="text-[10px] text-gray-500 mt-1 font-medium">{n.message}</p>
                   </div>
-                )) : <div className="text-center py-10"><p className="text-[10px] text-gray-200 font-black uppercase tracking-widest">Tidak ada pesan baru</p></div>}
+                )) : (
+                  <div className="text-center py-10">
+                    <p className="text-[10px] text-gray-200 font-black uppercase tracking-widest">Tidak ada pesan baru</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
-        <div className="max-w-6xl mx-auto">{renderContent()}</div>
+
+        <div className="max-w-6xl mx-auto">
+          {renderContent()}
+        </div>
       </main>
-      <ChatPopup primaryColor={activeWorkspace.color} currentUser={user} messages={messages} onSendMessage={handleSendMessage} isOpen={isChatOpen} setIsOpen={setIsChatOpen} unreadCount={0} isTyping={isOtherUserTyping} />
+
+      <ChatPopup 
+        primaryColor={activeWorkspace.color} currentUser={user} 
+        messages={messages} onSendMessage={handleSendMessage}
+        isOpen={isChatOpen} setIsOpen={setIsChatOpen} unreadCount={0}
+        isTyping={isOtherUserTyping}
+      />
     </div>
   );
 };

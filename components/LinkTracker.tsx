@@ -15,6 +15,7 @@ const LinkTracker: React.FC<LinkTrackerProps> = ({ primaryColorHex, onSaveManual
   const [insight, setInsight] = useState<PostInsight | null>(null);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
+  // State for manual entry form
   const [manualData, setManualData] = useState<PostInsight>({
     url: '',
     platform: 'Instagram',
@@ -52,9 +53,11 @@ const LinkTracker: React.FC<LinkTrackerProps> = ({ primaryColorHex, onSaveManual
 
   const saveManualEntry = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!manualData.url.trim()) return;
     onSaveManualInsight({ ...manualData, sourceType: 'manual', timestamp: new Date().toISOString() });
     setIsManualModalOpen(false);
-    alert("Manual entry saved!");
+    alert("Data manual berhasil disimpan ke analitik!");
+    setManualData({ url: '', platform: 'Instagram', likes: 0, comments: 0, shares: 0, engagementRate: 0, sentiment: 'neutral', analysis: '' });
   };
 
   return (
@@ -82,7 +85,7 @@ const LinkTracker: React.FC<LinkTrackerProps> = ({ primaryColorHex, onSaveManual
           onClick={() => setIsManualModalOpen(true)}
           className="px-8 bg-white border border-gray-100 rounded-3xl font-black uppercase text-[10px] tracking-widest text-gray-400 shadow-sm hover:bg-gray-50 transition-all flex items-center gap-2"
         >
-          <Plus size={18} /> Add Manual Entry
+          <Plus size={18} /> Entri Manual
         </button>
       </div>
 
@@ -91,13 +94,13 @@ const LinkTracker: React.FC<LinkTrackerProps> = ({ primaryColorHex, onSaveManual
           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setIsManualModalOpen(false)}></div>
           <div className="relative bg-white w-full max-w-lg rounded-[3rem] shadow-2xl border border-gray-100 animate-slide overflow-hidden">
             <div className="p-8 bg-blue-50 text-blue-500 flex justify-between items-center">
-              <h2 className="text-xl font-black uppercase tracking-widest">Manual Data Entry</h2>
-              <button onClick={() => setIsManualModalOpen(false)}><X /></button>
+              <h2 className="text-xl font-black uppercase tracking-widest">Input Data Manual</h2>
+              <button onClick={() => setIsManualModalOpen(false)} className="p-2 hover:bg-blue-100 rounded-xl transition-all"><X /></button>
             </div>
             <form onSubmit={saveManualEntry} className="p-8 space-y-6">
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-gray-300 tracking-widest">Post URL</label>
-                <input required type="url" value={manualData.url} onChange={e => setManualData({...manualData, url: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
+                <label className="text-[9px] font-black uppercase text-gray-300 tracking-widest">Link Postingan</label>
+                <input required type="url" value={manualData.url} onChange={e => setManualData({...manualData, url: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100 focus:bg-white" placeholder="https://..." />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -108,24 +111,24 @@ const LinkTracker: React.FC<LinkTrackerProps> = ({ primaryColorHex, onSaveManual
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase text-gray-300 tracking-widest">Likes</label>
-                  <input type="number" value={manualData.likes} onChange={e => setManualData({...manualData, likes: parseInt(e.target.value)})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
+                  <input type="number" value={manualData.likes} onChange={e => setManualData({...manualData, likes: parseInt(e.target.value) || 0})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase text-gray-300 tracking-widest">Comments</label>
-                  <input type="number" value={manualData.comments} onChange={e => setManualData({...manualData, comments: parseInt(e.target.value)})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
+                  <input type="number" value={manualData.comments} onChange={e => setManualData({...manualData, comments: parseInt(e.target.value) || 0})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase text-gray-300 tracking-widest">Shares</label>
-                  <input type="number" value={manualData.shares} onChange={e => setManualData({...manualData, shares: parseInt(e.target.value)})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
+                  <input type="number" value={manualData.shares} onChange={e => setManualData({...manualData, shares: parseInt(e.target.value) || 0})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[9px] font-black uppercase text-gray-300 tracking-widest">ER %</label>
-                  <input type="number" step="0.1" value={manualData.engagementRate} onChange={e => setManualData({...manualData, engagementRate: parseFloat(e.target.value)})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
+                  <input type="number" step="0.1" value={manualData.engagementRate} onChange={e => setManualData({...manualData, engagementRate: parseFloat(e.target.value) || 0})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold border border-gray-100" />
                 </div>
               </div>
-              <button type="submit" className="w-full py-5 bg-blue-100 text-blue-500 font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all">Save Manual Entry</button>
+              <button type="submit" className="w-full py-5 bg-blue-100 text-blue-500 font-black rounded-3xl uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all">Simpan Data Manual</button>
             </form>
           </div>
         </div>

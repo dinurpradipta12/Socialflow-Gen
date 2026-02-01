@@ -37,18 +37,19 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting'
   });
 
-  // Auto-save feature: every 30 seconds if modal is open
+  // Auto-save logic: Triggered every 30 seconds if form has content and is open
   useEffect(() => {
-    let interval: any;
+    let intervalId: any;
     if (isModalOpen) {
-      interval = setInterval(() => {
-        if (formData.title.trim()) {
-          console.log("Auto-saving draft...", formData);
-          setLastAutoSave(new Date().toLocaleTimeString());
+      intervalId = setInterval(() => {
+        if (formData.title.trim().length > 0) {
+          // In a real app, this would hit an API
+          console.log("Draft auto-saved:", formData.title);
+          setLastAutoSave(new Date().toLocaleTimeString('id-ID'));
         }
       }, 30000);
     }
-    return () => clearInterval(interval);
+    return () => clearInterval(intervalId);
   }, [isModalOpen, formData]);
 
   const openEditModal = (item: ContentPlanItem) => {
@@ -75,11 +76,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     setFormData({ title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting' });
   };
 
-  const filteredItems = items.filter(item => {
-    if (filterApprovedBy === 'All') return true;
-    return item.approvedBy === filterApprovedBy;
-  });
-
   const handleAnalyzeLink = async (item: ContentPlanItem) => {
     if (!item.postLink || item.postLink === '' || item.postLink === '#') {
       alert("Masukkan link postingan yang valid terlebih dahulu.");
@@ -98,6 +94,13 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     }
   };
 
+  const filteredItems = items.filter(item => {
+    if (filterApprovedBy === 'All') return true;
+    return item.approvedBy === filterApprovedBy;
+  });
+
+  const uniqueApprovers = Array.from(new Set(items.map(i => i.approvedBy).filter(Boolean)));
+
   return (
     <div className="space-y-6 animate-slide">
       <div className="flex justify-between items-center">
@@ -113,13 +116,11 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
               onChange={e => setFilterApprovedBy(e.target.value)}
               className="bg-transparent outline-none text-[10px] font-black uppercase tracking-widest text-gray-600"
             >
-              <option value="All">All Approvers</option>
-              {Array.from(new Set(items.map(i => i.approvedBy).filter(Boolean))).map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
+              <option value="All">Semua Approval</option>
+              {uniqueApprovers.map(name => <option key={name} value={name}>{name}</option>)}
             </select>
           </div>
-          <button onClick={() => { setEditingItem(null); setFormData({title: '', value: 'Educational', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', scriptUrl: '', visualUrl: '', status: 'Drafting'}); setLastAutoSave(null); setIsModalOpen(true); }} className="px-6 py-3 bg-blue-100 text-blue-500 rounded-2xl font-bold shadow-sm active:scale-95 flex items-center gap-2 transition-all hover:bg-blue-200">
+          <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="px-6 py-3 bg-blue-100 text-blue-500 rounded-2xl font-bold shadow-sm active:scale-95 flex items-center gap-2 transition-all hover:bg-blue-200">
              <Plus size={20} /> Tambah Plan
           </button>
         </div>
@@ -137,7 +138,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                  <div className="flex items-center gap-4">
                     {lastAutoSave && (
                       <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-blue-400 bg-white px-3 py-1.5 rounded-xl shadow-sm">
-                        <Clock size={10} /> Draft saved at {lastAutoSave}
+                        <Clock size={10} /> Tersimpan otomatis: {lastAutoSave}
                       </div>
                     )}
                     <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-blue-100/50 rounded-xl transition-all"><X size={24} /></button>
@@ -156,6 +157,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        </select>
                     </div>
                  </div>
+
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Konten Pilar</label>
@@ -166,6 +168,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        <input value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100" placeholder="Reels, Carousel, dll" />
                     </div>
                  </div>
+
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1 flex items-center gap-2"><FileText size={12}/> Script URL</label>
@@ -179,6 +182,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        </select>
                     </div>
                  </div>
+
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1 flex items-center gap-2"><ImageIcon size={12}/> Visual URL / Asset</label>
@@ -189,10 +193,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                        <input value={formData.postLink} onChange={e => setFormData({...formData, postLink: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100" placeholder="https://instagram.com/p/..." />
                     </div>
                  </div>
+
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Brief Visual / Deskripsi</label>
                     <textarea rows={4} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100" placeholder="Tulis instruksi editing atau brief visual di sini..." />
                  </div>
+
                  <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2">
                     <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-gray-100 text-gray-400 font-black uppercase text-[10px] tracking-widest rounded-2xl active:scale-95 transition-all">Batal</button>
                     <button type="submit" className="flex-[2] py-5 bg-blue-100 text-blue-500 font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-sm active:scale-95 transition-all hover:bg-blue-200">Simpan Perencanaan</button>
@@ -247,10 +253,17 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                                     </div>
                                  </div>
                                  <div className="flex flex-col gap-3 min-w-[240px]">
-                                    <button onClick={() => openEditModal(item)} className="w-full flex items-center justify-center gap-3 py-3.5 bg-gray-50 text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all hover:bg-gray-100">
+                                    <button 
+                                       onClick={() => openEditModal(item)}
+                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-gray-50 text-gray-900 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all hover:bg-gray-100"
+                                    >
                                        <Edit2 size={16}/> Edit Perencanaan
                                     </button>
-                                    <button onClick={() => handleAnalyzeLink(item)} disabled={isAnalyzing} className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-50 text-blue-500 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-blue-100 active:scale-95 transition-all">
+                                    <button 
+                                       onClick={() => handleAnalyzeLink(item)}
+                                       disabled={isAnalyzing}
+                                       className="w-full flex items-center justify-center gap-3 py-3.5 bg-blue-50 text-blue-500 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm hover:bg-blue-100 active:scale-95 transition-all"
+                                    >
                                        {isAnalyzing ? <Loader2 size={16} className="animate-spin"/> : <BarChart2 size={16}/>}
                                        Analyze Tracker
                                     </button>
@@ -261,6 +274,11 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                      )}
                   </React.Fragment>
                ))}
+               {filteredItems.length === 0 && (
+                 <tr>
+                   <td colSpan={3} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest">Tidak ada perencanaan ditemukan</td>
+                 </tr>
+               )}
             </tbody>
          </table>
       </div>
