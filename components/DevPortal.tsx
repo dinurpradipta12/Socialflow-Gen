@@ -17,23 +17,25 @@ interface DevPortalProps {
 
 const APPS_SCRIPT_CODE = `
 /**
- * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW
+ * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2 - Robust)
  * 1. Create a Google Sheet.
- * 2. Name the first sheet: "Registrations"
+ * 2. Name the first sheet tab: "Registrations"
  * 3. Add headers in Row 1: id, name, email, password, timestamp, status
  * 4. Extensions > Apps Script > Paste this code.
- * 5. Deploy > New Deployment > Web App > Access: "Anyone".
+ * 5. Deploy > New Deployment > Web App > Execute as: Me > Access: "Anyone".
  */
 
 function doGet(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
-  const data = sheet.getDataRange().getValues();
-  const headers = data[0];
-  const rows = data.slice(1);
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
+  if (!sheet) return ContentService.createTextOutput(JSON.stringify({error: "Sheet 'Registrations' not found"})).setMimeType(ContentService.MimeType.JSON);
   
-  const result = rows.map(row => {
-    let obj = {};
-    headers.forEach((header, i) => obj[header] = row[i]);
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var rows = data.slice(1);
+  
+  var result = rows.map(function(row) {
+    var obj = {};
+    headers.forEach(function(header, i) { obj[header] = row[i]; });
     return obj;
   });
   
@@ -42,9 +44,20 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
-  const action = e.parameter.action;
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
+  if (!sheet) return ContentService.createTextOutput("Error: Sheet not found").setMimeType(ContentService.MimeType.TEXT);
   
+  var action = e.parameter.action;
+  
+  // Handle case where params are in postData instead of parameter
+  if (!action && e.postData && e.postData.contents) {
+    try {
+      var body = JSON.parse(e.postData.contents);
+      action = body.action;
+      e.parameter = body; // Map for convenience
+    } catch(err) {}
+  }
+
   if (action === 'register') {
     sheet.appendRow([
       e.parameter.id, 
@@ -55,11 +68,11 @@ function doPost(e) {
       'pending'
     ]);
   } else if (action === 'updateStatus') {
-    const data = sheet.getDataRange().getValues();
-    const id = e.parameter.id;
-    const status = e.parameter.status;
+    var data = sheet.getDataRange().getValues();
+    var id = e.parameter.id;
+    var status = e.parameter.status;
     
-    for (let i = 1; i < data.length; i++) {
+    for (var i = 1; i < data.length; i++) {
       if (data[i][0] == id) {
         sheet.getRange(i + 1, 6).setValue(status);
         break;
@@ -96,7 +109,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
   const saveDbConfig = () => {
     if (!tempUrl.includes('script.google.com')) {
-      alert("Error: Masukkan URL Deployment Apps Script (bukan URL Google Sheets).");
+      alert("Error: Masukkan URL Deployment Apps Script (contoh: https://script.google.com/macros/s/.../exec).");
       return;
     }
     setDbSourceUrl(tempUrl);
@@ -168,7 +181,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                 />
                 <button onClick={saveDbConfig} className="px-8 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Connect</button>
              </div>
-             <p className="mt-4 text-[10px] text-amber-400 flex items-center gap-2 font-bold"><Info size={14}/> Gunakan URL Web App (Deploy > New Deployment) bukan URL Spreadsheet.</p>
+             <p className="mt-4 text-[10px] text-amber-400 flex items-center gap-2 font-bold"><Info size={14}/> Gunakan URL Web App (Deploy &gt; New Deployment) bukan URL Spreadsheet.</p>
           </div>
         )}
 

@@ -67,13 +67,22 @@ const App: React.FC = () => {
 
   // LOGIKA FETCH DATA DARI GOOGLE SHEETS
   const syncWithCloud = useCallback(async (isManual = false) => {
-    if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) return;
+    if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) {
+      if (isManual) alert("Error: URL Database belum diset dengan benar (script.google.com).");
+      return;
+    }
     if (!isManual && isSyncing) return;
 
     setIsSyncing(true);
     try {
-      // Menggunakan JSONP-like approach atau simple fetch jika Apps Script diset terbuka
       const res = await fetch(`${dbSourceUrl}?action=getRegistrations&t=${Date.now()}`);
+      
+      // Check if response is valid JSON
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error("Response is not JSON. Check if Script is deployed as Public 'Anyone'.");
+      }
+
       const cloudData = await res.json();
       
       if (Array.isArray(cloudData)) {
@@ -85,10 +94,10 @@ const App: React.FC = () => {
           if (newest) setDevNotif(newest);
         }
         prevRegCount.current = cloudData.length;
-        console.log("Cloud Sync Success:", cloudData.length, "records found.");
       }
     } catch (err) {
-      console.warn("Cloud Sync Fail: Pastikan URL Apps Script sudah di-deploy sebagai 'Web App' dan akses 'Anyone'.");
+      console.warn("Cloud Sync Fail:", err);
+      if (isManual) alert("Gagal Sinkronisasi: " + (err instanceof Error ? err.message : "Cek Konsol"));
     } finally {
       setIsSyncing(false);
     }
@@ -97,20 +106,19 @@ const App: React.FC = () => {
   useEffect(() => {
     if (dbSourceUrl) {
       syncWithCloud();
-      const interval = setInterval(() => syncWithCloud(), 15000);
+      const interval = setInterval(() => syncWithCloud(), 30000); // Polling slower to prevent rate limit
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud]);
 
   const handleRegistrationAction = useCallback(async (regId: string, status: 'approved' | 'rejected') => {
-    // 1. Update UI Lokal
     const updated = registrations.map(r => r.id === regId ? { ...r, status } : r);
     setRegistrations(updated);
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
 
-    // 2. Update ke Cloud
     if (dbSourceUrl) {
       try {
+        // Send as URL encoded for best compatibility with Google Apps Script doPost
         await fetch(dbSourceUrl, {
           method: 'POST',
           mode: 'no-cors',
@@ -124,7 +132,6 @@ const App: React.FC = () => {
       } catch (e) { console.error("Cloud Update Fail", e); }
     }
     
-    // 3. Tambah ke User List jika Approve
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
       if (reg) {
@@ -188,10 +195,8 @@ const App: React.FC = () => {
       status: 'pending' as const
     };
 
-    // 1. Kirim ke Cloud DULU (Agar data masuk ke Spreadsheet)
     if (dbSourceUrl) {
       try {
-        // Menggunakan URLSearchParams agar data ter-serialisasi dengan benar untuk Apps Script doPost
         const formData = new URLSearchParams();
         formData.append('action', 'register');
         formData.append('id', newReg.id);
@@ -201,19 +206,20 @@ const App: React.FC = () => {
         formData.append('timestamp', newReg.timestamp);
         formData.append('status', newReg.status);
 
+        // We use mode: 'no-cors' because we don't need to read the response of the POST
+        // and it avoids preflight issues. Apps Script doPost handles form data well.
         await fetch(dbSourceUrl, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: formData.toString()
         });
-        console.log("Pendaftaran dikirim ke Cloud.");
+        console.log("Data pendaftaran dikirim ke Cloud.");
       } catch (err) {
         console.error("Cloud Post Error:", err);
       }
     }
 
-    // 2. Simpan Lokal (Fallback)
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
