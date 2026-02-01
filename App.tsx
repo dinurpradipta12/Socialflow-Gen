@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { ThemeColor, Workspace, User, Message, SystemNotification, PostInsight } from './types';
-import { MOCK_WORKSPACES, MOCK_USERS, THEME_COLORS, DEV_CREDENTIALS, MOCK_MESSAGES } from './constants';
+import { ThemeColor, Workspace, User, Message, SystemNotification, PostInsight, RegistrationRequest } from './types';
+import { MOCK_WORKSPACES, MOCK_USERS, THEME_COLORS, DEV_CREDENTIALS, MOCK_MESSAGES, MOCK_REGISTRATIONS } from './constants';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Calendar from './components/Calendar';
@@ -15,12 +15,13 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import TopNotification from './components/TopNotification';
-import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff } from 'lucide-react';
 
 const App: React.FC = () => {
   const [authState, setAuthState] = useState<'login' | 'register' | 'authenticated'>('login');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showPassword, setShowPassword] = useState(false);
   
   const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE'); // Pastel Blue
   const [accentColorHex, setAccentColorHex] = useState('#DDD6FE'); // Pastel Purple
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   const [analyticsData, setAnalyticsData] = useState<PostInsight[]>([]);
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
   const [user, setUser] = useState<User | null>(null);
+  const [registrations, setRegistrations] = useState<RegistrationRequest[]>(MOCK_REGISTRATIONS);
 
   const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -71,9 +73,18 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      alert(`Permintaan pendaftaran untuk ${regName} telah dikirim ke developer untuk persetujuan lisensi.`);
+      const newReg: RegistrationRequest = {
+        id: Date.now().toString(),
+        name: regName,
+        email: regEmail,
+        timestamp: new Date().toLocaleString(),
+        status: 'pending'
+      };
+      setRegistrations(prev => [newReg, ...prev]);
+      alert(`Pendaftaran berhasil dikirim! Silakan hubungi developer untuk aktivasi lisensi.`);
       setAuthState('login');
       setLoading(false);
+      setRegName(''); setRegEmail(''); setRegPassword('');
     }, 1500);
   };
 
@@ -111,10 +122,13 @@ const App: React.FC = () => {
                   <div className="relative group">
                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-400 transition-colors" size={16} />
                     <input 
-                      type="password" required value={password} onChange={(e) => setPassword(e.target.value)} 
-                      className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
+                      type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)} 
+                      className="w-full pl-12 pr-12 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
                       placeholder="Password" 
                     />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-900 transition-colors">
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                 </div>
 
@@ -144,11 +158,16 @@ const App: React.FC = () => {
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
                     placeholder="Email" 
                   />
-                  <input 
-                    type="password" required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} 
-                    className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm" 
-                    placeholder="Password" 
-                  />
+                  <div className="relative">
+                    <input 
+                      type={showPassword ? "text" : "password"} required value={regPassword} onChange={(e) => setRegPassword(e.target.value)} 
+                      className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-gray-700 placeholder-gray-300 focus:bg-white focus:border-blue-200 transition-all text-sm pr-12" 
+                      placeholder="Password" 
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-900 transition-colors">
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                </div>
                <button 
                   type="submit" disabled={loading} 
@@ -203,7 +222,7 @@ const App: React.FC = () => {
           customLogo={customLogo} setCustomLogo={setCustomLogo}
         />
       );
-      case 'devPortal': return isDev ? <DevPortal primaryColorHex={primaryColorHex} /> : <Dashboard primaryColor={activeWorkspace.color} />;
+      case 'devPortal': return isDev ? <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} /> : <Dashboard primaryColor={activeWorkspace.color} />;
       default: return <Dashboard primaryColor={activeWorkspace.color} />;
     }
   };
@@ -245,7 +264,7 @@ const App: React.FC = () => {
 
         {showSystemNotifs && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
-            <div className="absolute inset-0 bg-slate-200/20 backdrop-blur-sm" onClick={() => setShowSystemNotifs(false)}></div>
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setShowSystemNotifs(false)}></div>
             <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden animate-slide">
               <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
                 <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Notifikasi</h3>

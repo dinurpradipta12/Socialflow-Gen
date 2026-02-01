@@ -35,8 +35,8 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
   const colorSet = THEME_COLORS[primaryColor] || THEME_COLORS.blue;
 
   // Pastel Chart Colors
-  const chartColorMain = '#93C5FD'; // Pastel blue
-  const chartColorSecondary = '#F1F5F9'; // Light gray
+  const chartColorMain = '#BFDBFE'; // Pastel blue
+  const chartColorSecondary = '#F1F5F9'; // Very light gray
 
   return (
     <div className="space-y-8 animate-slide">
@@ -47,7 +47,7 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
         </div>
         <div className="flex gap-4">
           <button className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-900 shadow-sm hover:bg-gray-50 transition-all">Export</button>
-          <button className={`px-6 py-3 ${colorSet.bg} ${colorSet.text} rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all hover:brightness-95`}>Schedule New</button>
+          <button className={`px-6 py-3 bg-blue-50 text-blue-400 border border-blue-100 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all hover:brightness-95`}>Schedule New</button>
         </div>
       </div>
 
@@ -67,7 +67,7 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#cbd5e1', fontSize: 10}} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#cbd5e1', fontSize: 10}} />
-                <Tooltip cursor={{fill: 'rgba(0,0,0,0.02)'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }} />
+                <Tooltip cursor={{fill: 'rgba(0,0,0,0.01)'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }} />
                 <Bar dataKey="engagement" fill={chartColorMain} radius={[6, 6, 0, 0]} />
                 <Bar dataKey="reach" fill={chartColorSecondary} radius={[6, 6, 0, 0]} />
               </BarChart>

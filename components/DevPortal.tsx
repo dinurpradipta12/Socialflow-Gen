@@ -1,10 +1,17 @@
-import React, { useState } from 'react';
-import { User } from '../types';
-import { MOCK_USERS } from '../constants';
-import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search } from 'lucide-react';
 
-const DevPortal: React.FC<{ primaryColorHex: string }> = ({ primaryColorHex }) => {
+import React, { useState } from 'react';
+import { User, RegistrationRequest } from '../types';
+import { MOCK_USERS } from '../constants';
+import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle } from 'lucide-react';
+
+interface DevPortalProps {
+  primaryColorHex: string;
+  registrations: RegistrationRequest[];
+}
+
+const DevPortal: React.FC<DevPortalProps> = ({ primaryColorHex, registrations: initialRegistrations }) => {
   const [appUsers, setAppUsers] = useState<User[]>(MOCK_USERS);
+  const [appRegistrations, setAppRegistrations] = useState<RegistrationRequest[]>(initialRegistrations);
   const [searchTerm, setSearchTerm] = useState('');
 
   const handleDateChange = (userId: string, newDate: string) => {
@@ -28,28 +35,82 @@ const DevPortal: React.FC<{ primaryColorHex: string }> = ({ primaryColorHex }) =
     setAppUsers(prev => prev.map(u => u.id === userId ? { ...u, isSubscribed: !u.isSubscribed } : u));
   };
 
+  const handleApproval = (regId: string, status: 'approved' | 'rejected') => {
+    setAppRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
+    alert(`Status pendaftaran telah diupdate ke ${status}.`);
+  };
+
   return (
     <div className="space-y-12 animate-slide pb-20">
-      <div className="bg-gray-900 p-12 rounded-[4rem] border border-gray-800 relative overflow-hidden shadow-2xl">
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+      <div className="bg-blue-50 p-12 rounded-[4rem] border border-blue-100 relative overflow-hidden shadow-sm">
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6 text-blue-500">
            <div className="space-y-2">
-              <h1 className="text-4xl font-black text-white flex items-center gap-4"><Database className="text-blue-500" /> Database Otoritas</h1>
-              <p className="text-gray-400 font-medium">Panel kontrol pusat lisensi Snaillabs Socialflow Engine.</p>
+              <h1 className="text-4xl font-black flex items-center gap-4"><Database /> Database Otoritas</h1>
+              <p className="font-medium">Panel kontrol pusat lisensi Snaillabs Socialflow Engine.</p>
            </div>
-           <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-md text-center">
-              <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Total Verified Users</p>
-              <p className="text-3xl font-black text-white">{appUsers.length}</p>
+           <div className="px-8 py-4 bg-white border border-blue-100 rounded-3xl text-center shadow-sm">
+              <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60">Total Verified Users</p>
+              <p className="text-3xl font-black">{appUsers.length}</p>
            </div>
         </div>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-[80px]"></div>
       </div>
 
+      {/* Registration Approval Section */}
+      <section className="space-y-6">
+        <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3 ml-4">
+           <RefreshCw size={16} className="text-purple-400 animate-spin-slow"/> Permintaan Pendaftaran Baru
+        </h3>
+        <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
+           <table className="w-full text-left">
+              <thead className="bg-gray-50/50">
+                 <tr>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">User Info</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Waktu Daftar</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Status</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Aksi</th>
+                 </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                 {appRegistrations.map(r => (
+                    <tr key={r.id} className="hover:bg-gray-50 transition-all">
+                       <td className="px-10 py-6">
+                          <div>
+                             <p className="text-sm font-black text-gray-900">{r.name}</p>
+                             <p className="text-[10px] text-gray-400 font-bold uppercase">{r.email}</p>
+                          </div>
+                       </td>
+                       <td className="px-10 py-6 text-[11px] font-bold text-gray-400">{r.timestamp}</td>
+                       <td className="px-10 py-6">
+                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
+                             r.status === 'pending' ? 'bg-amber-50 text-amber-500' : 
+                             r.status === 'approved' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
+                          }`}>{r.status}</span>
+                       </td>
+                       <td className="px-10 py-6 flex justify-center gap-3">
+                          {r.status === 'pending' && (
+                             <>
+                                <button onClick={() => handleApproval(r.id, 'approved')} className="p-2 bg-emerald-100 text-emerald-500 rounded-xl hover:scale-110 transition-all"><CheckCircle size={20}/></button>
+                                <button onClick={() => handleApproval(r.id, 'rejected')} className="p-2 bg-rose-100 text-rose-500 rounded-xl hover:scale-110 transition-all"><XCircle size={20}/></button>
+                             </>
+                          )}
+                       </td>
+                    </tr>
+                 ))}
+                 {appRegistrations.length === 0 && (
+                    <tr><td colSpan={4} className="py-12 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest">Tidak ada permintaan pending</td></tr>
+                 )}
+              </tbody>
+           </table>
+        </div>
+      </section>
+
+      {/* User Management Section */}
       <section className="space-y-6">
         <div className="flex justify-between items-center px-4">
            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
              <ShieldCheck size={16} className="text-blue-500"/> Manajemen Lisensi Global
            </h3>
-           <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border border-gray-100 shadow-sm focus-within:ring-2 focus-within:ring-[var(--primary-color)] transition-all">
+           <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-2xl border border-gray-100 shadow-sm focus-within:ring-2 focus-within:ring-blue-100 transition-all">
              <Search size={16} className="text-gray-400" />
              <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Cari user..." className="bg-transparent outline-none text-xs font-bold text-gray-900 w-48" />
            </div>
@@ -79,22 +140,22 @@ const DevPortal: React.FC<{ primaryColorHex: string }> = ({ primaryColorHex }) =
                     </td>
                     <td className="px-10 py-8">
                        <div className="flex items-center gap-3 bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm">
-                          <CalendarDays size={16} className="text-blue-500" />
+                          <CalendarDays size={16} className="text-blue-400" />
                           <input type="date" value={u.subscriptionExpiry} onChange={e => handleDateChange(u.id, e.target.value)} className="bg-transparent outline-none cursor-pointer text-xs font-black text-gray-900" />
                        </div>
                     </td>
                     <td className="px-10 py-8">
                        <div className="flex justify-center gap-2">
-                          <button onClick={() => renewLicense(u.id, '1m')} className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">+1 Bln</button>
-                          <button onClick={() => renewLicense(u.id, '3m')} className="px-4 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">+3 Bln</button>
-                          <button onClick={() => renewLicense(u.id, '1y')} className="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all">+1 Thn</button>
+                          <button onClick={() => renewLicense(u.id, '1m')} className="px-4 py-2.5 bg-gray-50 text-gray-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all">+1 Bln</button>
+                          <button onClick={() => renewLicense(u.id, '3m')} className="px-4 py-2.5 bg-gray-50 text-gray-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all">+3 Bln</button>
+                          <button onClick={() => renewLicense(u.id, '1y')} className="px-4 py-2.5 bg-blue-100 text-blue-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-200 transition-all">+1 Thn</button>
                        </div>
                     </td>
                     <td className="px-10 py-8">
                        <button 
                          onClick={() => toggleUserActive(u.id)}
                          className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest mx-auto flex items-center gap-2 shadow-sm transition-all ${
-                           u.isSubscribed ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-500 text-white shadow-rose-100'
+                           u.isSubscribed ? 'bg-emerald-50 text-emerald-400' : 'bg-rose-50 text-rose-400'
                          }`}
                        >
                          <Power size={14}/> {u.isSubscribed ? 'Active' : 'Blocked'}

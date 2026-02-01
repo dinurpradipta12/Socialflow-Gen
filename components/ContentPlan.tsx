@@ -89,7 +89,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
       {isModalOpen && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-6">
-           <div className="absolute inset-0 bg-slate-200/20 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+           <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
            <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-[0_40px_80px_-15px_rgba(0,0,0,0.05)] overflow-hidden animate-slide flex flex-col max-h-[90vh] border border-gray-50">
               <div className="p-8 bg-blue-50 text-blue-500 flex justify-between items-center">
                  <div>

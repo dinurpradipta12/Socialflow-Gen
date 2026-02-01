@@ -67,6 +67,7 @@ export const MOCK_MESSAGES: Message[] = [
 
 export const MOCK_REGISTRATIONS: RegistrationRequest[] = [
   { id: 'r1', name: 'Andi Pratama', email: 'andi@gmail.com', timestamp: '2023-10-24 10:00', status: 'pending' },
+  { id: 'r2', name: 'Siti Aminah', email: 'siti@snaillabs.id', timestamp: '2023-10-25 08:30', status: 'pending' },
 ];
 
 export const MOCK_CONTENT_PLANS: ContentPlanItem[] = [
