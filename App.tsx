@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeColor, Workspace, User, Message, SystemNotification, PostInsight, RegistrationRequest, Permissions } from './types';
 import { MOCK_WORKSPACES, MOCK_USERS, THEME_COLORS, DEV_CREDENTIALS, MOCK_MESSAGES, MOCK_REGISTRATIONS } from './constants';
 import Sidebar from './components/Sidebar';
@@ -14,10 +14,10 @@ import DevPortal from './components/DevPortal';
 import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
+import TopNotification from './components/TopNotification';
 import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon } from 'lucide-react';
 
 const App: React.FC = () => {
-  // PERSISTENCE: Ambil user dari localStorage saat load
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('sf_session_user');
     return saved ? JSON.parse(saved) : null;
@@ -52,7 +52,7 @@ const App: React.FC = () => {
 
   const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [systemNotifications, setSystemNotifications] = useState<SystemNotification[]>([]);
+  const [devNotif, setDevNotif] = useState<RegistrationRequest | null>(null);
 
   // Form State
   const [email, setEmail] = useState('');
@@ -87,6 +87,53 @@ const App: React.FC = () => {
     document.documentElement.style.setProperty('--accent-color', accentColorHex);
   }, [primaryColorHex, accentColorHex]);
 
+  // Handle Registration Action (Moved up so it can be used in effects)
+  const handleRegistrationAction = useCallback((regId: string, status: 'approved' | 'rejected') => {
+    setRegistrations(prev => {
+      const updated = prev.map(r => r.id === regId ? { ...r, status } : r);
+      if (status === 'approved') {
+        const reg = prev.find(r => r.id === regId);
+        if (reg) {
+          const newUser: User = {
+            id: `U-${Date.now()}`,
+            name: reg.name,
+            email: reg.email,
+            role: 'viewer',
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
+            permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: false },
+            isSubscribed: true,
+            subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            jobdesk: 'New Member', kpi: [], activityLogs: [], performanceScore: 0
+          };
+          setAllUsers(prevUsers => [...prevUsers, newUser]);
+        }
+      }
+      return updated;
+    });
+    setDevNotif(null);
+  }, [registrations]);
+
+  // REAL-TIME CHECKER FOR DEVELOPER NOTIFICATIONS
+  useEffect(() => {
+    if (!isDev) return;
+
+    const checkNewRegs = () => {
+      const saved = localStorage.getItem('sf_registrations_db');
+      if (saved) {
+        const currentRegs: RegistrationRequest[] = JSON.parse(saved);
+        const latestPending = currentRegs.find(r => r.status === 'pending');
+        
+        // Show notification only if it's new (simulated by checking if we already notified this specific ID)
+        if (latestPending && (!devNotif || devNotif.id !== latestPending.id)) {
+          setDevNotif(latestPending);
+        }
+      }
+    };
+
+    const interval = setInterval(checkNewRegs, 3000); // Check every 3 seconds
+    return () => clearInterval(interval);
+  }, [isDev, devNotif]);
+
   // DEVELOPER AUTO-WORKSPACE ASSIGNMENT
   useEffect(() => {
     if (isDev && !activeWorkspace) {
@@ -99,7 +146,6 @@ const App: React.FC = () => {
     setLoading(true);
     setTimeout(() => {
       let loggedInUser: User | undefined;
-
       if (email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password) {
         loggedInUser = allUsers.find(u => u.role === 'developer');
       } else {
@@ -110,8 +156,6 @@ const App: React.FC = () => {
         setUser(loggedInUser);
         localStorage.setItem('sf_session_user', JSON.stringify(loggedInUser));
         setAuthState('authenticated');
-        
-        // Developer skips manual workspace selection
         if (loggedInUser.role === 'developer') {
           setActiveWorkspace(MOCK_WORKSPACES[0]);
         } else if (loggedInUser.workspaceId) {
@@ -137,7 +181,11 @@ const App: React.FC = () => {
         timestamp: new Date().toLocaleString('id-ID'),
         status: 'pending'
       };
-      setRegistrations(prev => [newReg, ...prev]);
+      setRegistrations(prev => {
+        const updated = [newReg, ...prev];
+        localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
+        return updated;
+      });
       alert(`Pendaftaran Berhasil! Menunggu verifikasi Developer.`);
       setAuthState('login');
       setLoading(false);
@@ -163,7 +211,7 @@ const App: React.FC = () => {
 
   const handleJoinWorkspace = (code: string) => {
     if (!user) return;
-    const targetWs = MOCK_WORKSPACES[0]; // Logic simulasi
+    const targetWs = MOCK_WORKSPACES[0];
     if (targetWs.inviteCode === code) {
       const updatedUser = { ...user, workspaceId: targetWs.id, role: 'editor' as const };
       const updatedWs = { ...targetWs, members: [...targetWs.members, updatedUser] };
@@ -184,41 +232,6 @@ const App: React.FC = () => {
     setActiveWorkspace(null);
     setEmail('');
     setPassword('');
-  };
-
-  // Fix: Added missing handleRegistrationAction function for DevPortal to process new user requests
-  const handleRegistrationAction = (regId: string, status: 'approved' | 'rejected') => {
-    setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
-
-    if (status === 'approved') {
-      const reg = registrations.find(r => r.id === regId);
-      if (reg) {
-        const newUser: User = {
-          id: `U-${Date.now()}`,
-          name: reg.name,
-          email: reg.email,
-          role: 'viewer',
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
-          permissions: {
-            dashboard: true,
-            calendar: true,
-            ads: false,
-            analytics: false,
-            tracker: false,
-            team: false,
-            settings: false,
-            contentPlan: false,
-          },
-          isSubscribed: true,
-          subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          jobdesk: 'New Member',
-          kpi: [],
-          activityLogs: [],
-          performanceScore: 0
-        };
-        setAllUsers(prev => [...prev, newUser]);
-      }
-    }
   };
 
   if (authState !== 'authenticated' || !user) {
@@ -260,7 +273,6 @@ const App: React.FC = () => {
     );
   }
 
-  // ONBOARDING SCREEN: Skip for Dev
   if (!activeWorkspace && !isDev) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -286,12 +298,28 @@ const App: React.FC = () => {
     );
   }
 
-  // Fallback for renders while workspace is setting
   const displayWorkspace = activeWorkspace || MOCK_WORKSPACES[0];
   const fontSizeClass = fontSize === 'small' ? 'text-xs' : fontSize === 'large' ? 'text-lg' : 'text-sm';
 
   return (
     <div className={`min-h-screen bg-[#FDFDFD] text-gray-900 ${fontSizeClass}`}>
+      {devNotif && (
+        <TopNotification 
+          primaryColor="blue"
+          senderName="New Approval Request"
+          messageText={`${devNotif.name} ingin bergabung.`}
+          onClose={() => setDevNotif(null)}
+          onClick={() => { setActiveTab('devPortal'); setDevNotif(null); }}
+          actionButton={
+            <button 
+              onClick={(e) => { e.stopPropagation(); handleRegistrationAction(devNotif.id, 'approved'); }}
+              className="px-4 py-2 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest rounded-xl hover:bg-emerald-600 shadow-sm"
+            >
+              Approve Now
+            </button>
+          }
+        />
+      )}
       <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} primaryColorHex={primaryColorHex} onLogout={handleLogout} user={user} appLogo={customLogo} />
       <main className="ml-72 p-12 min-h-screen">
         <header className="flex justify-between items-center mb-10">
@@ -329,7 +357,7 @@ const App: React.FC = () => {
           )}
           {activeTab === 'profile' && <Profile user={user} primaryColor={displayWorkspace.color} setUser={setUser} />}
           {activeTab === 'settings' && <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex} fontSize={fontSize} setFontSize={setFontSize} customLogo={customLogo} setCustomLogo={setCustomLogo} />}
-          {activeTab === 'devPortal' && isDev && <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} />}
+          {activeTab === 'devPortal' && isDev && <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} setRegistrations={setRegistrations} />}
         </div>
       </main>
       <ChatPopup primaryColor={displayWorkspace.color} currentUser={user} messages={messages} onSendMessage={(t) => setMessages([...messages, { id: Date.now().toString(), senderId: user!.id, text: t, timestamp: new Date().toISOString() }])} isOpen={isChatOpen} setIsOpen={setIsChatOpen} unreadCount={0} />

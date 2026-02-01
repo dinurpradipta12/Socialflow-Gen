@@ -1,8 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, RegistrationRequest } from '../types';
-// Add missing Download icon to imports
-import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download } from 'lucide-react';
+import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2 } from 'lucide-react';
 
 interface DevPortalProps {
   primaryColorHex: string;
@@ -10,6 +9,7 @@ interface DevPortalProps {
   onRegistrationAction: (regId: string, status: 'approved' | 'rejected') => void;
   users: User[];
   setUsers: (users: User[]) => void;
+  setRegistrations: (regs: RegistrationRequest[]) => void;
 }
 
 const DevPortal: React.FC<DevPortalProps> = ({ 
@@ -17,9 +17,23 @@ const DevPortal: React.FC<DevPortalProps> = ({
   registrations, 
   onRegistrationAction,
   users,
-  setUsers
+  setUsers,
+  setRegistrations
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshDatabase = () => {
+    setIsRefreshing(true);
+    // Simulating real-time fetch from localStorage
+    setTimeout(() => {
+      const savedRegs = localStorage.getItem('sf_registrations_db');
+      if (savedRegs) setRegistrations(JSON.parse(savedRegs));
+      const savedUsers = localStorage.getItem('sf_users_db');
+      if (savedUsers) setUsers(JSON.parse(savedUsers));
+      setIsRefreshing(false);
+    }, 1000);
+  };
 
   const handleDateChange = (userId: string, newDate: string) => {
     setUsers(users.map(u => u.id === userId ? { ...u, subscriptionExpiry: newDate } : u));
@@ -47,23 +61,12 @@ const DevPortal: React.FC<DevPortalProps> = ({
       alert("Tidak ada data untuk di-export.");
       return;
     }
-    
-    // Header CSV
     const headers = ["ID", "Nama/Username", "Email", "Password", "Status", "Waktu Daftar"];
     const csvRows = [headers.join(',')];
-
     data.forEach(item => {
-      const row = [
-        item.id,
-        item.name,
-        item.email,
-        item.password || 'HIDDEN',
-        item.status || 'ACTIVE',
-        item.timestamp || '-'
-      ].map(val => `"${val}"`).join(',');
+      const row = [item.id, item.name, item.email, item.password || 'HIDDEN', item.status || 'ACTIVE', item.timestamp || '-'].map(val => `"${val}"`).join(',');
       csvRows.push(row);
     });
-
     const csvContent = "data:text/csv;charset=utf-8," + csvRows.join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -97,26 +100,35 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
       {/* Registration Section */}
       <section className="space-y-6">
-        <div className="flex justify-between items-center px-4">
+        <div className="flex flex-wrap justify-between items-center px-4 gap-4">
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
-             <RefreshCw size={16} className="text-blue-400 animate-spin-slow"/> Antrian Verifikasi Masuk
+             <RefreshCw size={16} className={`text-blue-400 ${isRefreshing ? 'animate-spin' : ''}`}/> Antrian Verifikasi Masuk
           </h3>
-          <button 
-            onClick={() => exportToCSV(registrations, `SF_Pendaftar_${new Date().toLocaleDateString()}`)}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-100 text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-200 transition-all shadow-sm"
-          >
-            <FileSpreadsheet size={16} /> Export Data Pendaftar
-          </button>
+          <div className="flex gap-3">
+            <button 
+              onClick={handleRefreshDatabase}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-sm active:scale-95"
+            >
+              {isRefreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+              <span>Refresh Real-time</span>
+            </button>
+            <button 
+              onClick={() => exportToCSV(registrations, `SF_Pendaftar_${new Date().toLocaleDateString()}`)}
+              className="flex items-center gap-2 px-6 py-2 bg-blue-100 text-blue-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-200 transition-all shadow-sm"
+            >
+              <FileSpreadsheet size={16} /> Export CSV
+            </button>
+          </div>
         </div>
         
-        <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm ring-1 ring-gray-100">
            <table className="w-full text-left">
               <thead className="bg-gray-50/50">
                  <tr>
                     <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Username / Email</th>
                     <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Password</th>
                     <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Waktu Daftar</th>
-                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Status</th>
                     <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Aksi</th>
                  </tr>
               </thead>
@@ -134,35 +146,33 @@ const DevPortal: React.FC<DevPortalProps> = ({
                        </td>
                        <td className="px-10 py-6 text-[10px] font-bold text-gray-400">{r.timestamp}</td>
                        <td className="px-10 py-6">
-                          <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${
-                             r.status === 'pending' ? 'bg-amber-50 text-amber-500' : 
-                             r.status === 'approved' ? 'bg-emerald-50 text-emerald-500' : 'bg-rose-50 text-rose-500'
-                          }`}>{r.status}</span>
-                       </td>
-                       <td className="px-10 py-6 flex justify-center gap-3">
-                          {r.status === 'pending' && (
-                             <>
-                                <button 
-                                  onClick={() => onRegistrationAction(r.id, 'approved')} 
-                                  className="p-2 bg-emerald-100 text-emerald-500 rounded-xl hover:scale-110 transition-all"
-                                  title="Approve & Grant Access"
-                                >
-                                  <CheckCircle size={20}/>
-                                </button>
-                                <button 
-                                  onClick={() => onRegistrationAction(r.id, 'rejected')} 
-                                  className="p-2 bg-rose-100 text-rose-500 rounded-xl hover:scale-110 transition-all"
-                                  title="Reject Access"
-                                >
-                                  <XCircle size={20}/>
-                                </button>
-                             </>
-                          )}
+                          <div className="flex justify-center gap-3">
+                            {r.status === 'pending' ? (
+                               <>
+                                  <button 
+                                    onClick={() => onRegistrationAction(r.id, 'approved')} 
+                                    className="px-4 py-2 bg-emerald-100 text-emerald-600 rounded-xl text-[9px] font-black uppercase hover:bg-emerald-200 transition-all"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button 
+                                    onClick={() => onRegistrationAction(r.id, 'rejected')} 
+                                    className="px-4 py-2 bg-rose-100 text-rose-600 rounded-xl text-[9px] font-black uppercase hover:bg-rose-200 transition-all"
+                                  >
+                                    Reject
+                                  </button>
+                               </>
+                            ) : (
+                              <span className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest ${r.status === 'approved' ? 'bg-emerald-50 text-emerald-400' : 'bg-rose-50 text-rose-400'}`}>
+                                {r.status}
+                              </span>
+                            )}
+                          </div>
                        </td>
                     </tr>
                  ))}
                  {registrations.length === 0 && (
-                    <tr><td colSpan={5} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest italic">Belum ada pendaftaran baru hari ini.</td></tr>
+                    <tr><td colSpan={4} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest italic">Belum ada pendaftaran baru hari ini.</td></tr>
                  )}
               </tbody>
            </table>
@@ -171,7 +181,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
       {/* Active Users Section */}
       <section className="space-y-6">
-        <div className="flex justify-between items-center px-4">
+        <div className="flex flex-wrap justify-between items-center px-4 gap-4">
            <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] flex items-center gap-3">
              <ShieldCheck size={16} className="text-emerald-500"/> Manajemen Member Aktif
            </h3>
