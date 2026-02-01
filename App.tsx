@@ -30,6 +30,9 @@ const App: React.FC = () => {
 
   const [analyticsData, setAnalyticsData] = useState<PostInsight[]>([]);
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>(MOCK_WORKSPACES[0]);
+  
+  // App-level "Database" State
+  const [allUsers, setAllUsers] = useState<User[]>(MOCK_USERS);
   const [user, setUser] = useState<User | null>(null);
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>(MOCK_REGISTRATIONS);
 
@@ -55,15 +58,19 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      let loggedInUser = MOCK_USERS.find(u => u.email === email);
+      // Check in the dynamic state list first
+      let loggedInUser = allUsers.find(u => u.email === email);
+      
+      // Fallback for hardcoded Dev credentials if not in MOCK_USERS
       if (email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password) {
-        loggedInUser = MOCK_USERS.find(u => u.role === 'developer');
+        loggedInUser = allUsers.find(u => u.role === 'developer');
       }
+
       if (loggedInUser) {
         setUser(loggedInUser);
         setAuthState('authenticated');
       } else {
-        alert('Akses Ditolak: Periksa kembali email dan password Anda.');
+        alert('Akses Ditolak: Akun tidak ditemukan atau periksa kembali password Anda.');
       }
       setLoading(false);
     }, 1200);
@@ -80,12 +87,48 @@ const App: React.FC = () => {
         timestamp: new Date().toLocaleString(),
         status: 'pending'
       };
+      // Important: Add to the registrations list which is passed to the DevPortal
       setRegistrations(prev => [newReg, ...prev]);
-      alert(`Pendaftaran berhasil dikirim! Silakan hubungi developer untuk aktivasi lisensi.`);
+      
+      alert(`Pendaftaran berhasil dikirim! Silakan hubungi developer (dev@snaillabs.id) untuk aktivasi lisensi.`);
       setAuthState('login');
       setLoading(false);
       setRegName(''); setRegEmail(''); setRegPassword('');
     }, 1500);
+  };
+
+  const handleRegistrationAction = (regId: string, status: 'approved' | 'rejected') => {
+    setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
+    
+    if (status === 'approved') {
+      const reg = registrations.find(r => r.id === regId);
+      if (reg) {
+        const newUser: User = {
+          id: (allUsers.length + 1).toString(),
+          name: reg.name,
+          email: reg.email,
+          role: 'editor',
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.email}`,
+          permissions: {
+            dashboard: true,
+            calendar: true,
+            ads: true,
+            analytics: true,
+            tracker: true,
+            team: true,
+            settings: false,
+            contentPlan: true,
+          },
+          isSubscribed: true,
+          subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          jobdesk: 'Social Media Editor',
+          kpi: [],
+          activityLogs: [],
+          performanceScore: 0
+        };
+        setAllUsers(prev => [...prev, newUser]);
+      }
+    }
   };
 
   const handleLogout = () => {
@@ -222,7 +265,15 @@ const App: React.FC = () => {
           customLogo={customLogo} setCustomLogo={setCustomLogo}
         />
       );
-      case 'devPortal': return isDev ? <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} /> : <Dashboard primaryColor={activeWorkspace.color} />;
+      case 'devPortal': return isDev ? (
+        <DevPortal 
+          primaryColorHex={primaryColorHex} 
+          registrations={registrations} 
+          onRegistrationAction={handleRegistrationAction}
+          users={allUsers}
+          setUsers={setAllUsers}
+        />
+      ) : <Dashboard primaryColor={activeWorkspace.color} />;
       default: return <Dashboard primaryColor={activeWorkspace.color} />;
     }
   };
@@ -265,7 +316,7 @@ const App: React.FC = () => {
         {showSystemNotifs && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
             <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setShowSystemNotifs(false)}></div>
-            <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden animate-slide">
+            <div className="relative w-full max-w-sm bg-white rounded-[2.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.1)] border border-gray-100 overflow-hidden animate-slide">
               <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
                 <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Notifikasi</h3>
                 <button onClick={() => setShowSystemNotifs(false)} className="p-2 hover:bg-gray-100 rounded-xl transition-all"><X size={18}/></button>

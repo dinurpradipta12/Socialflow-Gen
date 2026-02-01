@@ -1,25 +1,31 @@
 
 import React, { useState } from 'react';
 import { User, RegistrationRequest } from '../types';
-import { MOCK_USERS } from '../constants';
 import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle } from 'lucide-react';
 
 interface DevPortalProps {
   primaryColorHex: string;
   registrations: RegistrationRequest[];
+  onRegistrationAction: (regId: string, status: 'approved' | 'rejected') => void;
+  users: User[];
+  setUsers: (users: User[]) => void;
 }
 
-const DevPortal: React.FC<DevPortalProps> = ({ primaryColorHex, registrations: initialRegistrations }) => {
-  const [appUsers, setAppUsers] = useState<User[]>(MOCK_USERS);
-  const [appRegistrations, setAppRegistrations] = useState<RegistrationRequest[]>(initialRegistrations);
+const DevPortal: React.FC<DevPortalProps> = ({ 
+  primaryColorHex, 
+  registrations, 
+  onRegistrationAction,
+  users,
+  setUsers
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const handleDateChange = (userId: string, newDate: string) => {
-    setAppUsers(prev => prev.map(u => u.id === userId ? { ...u, subscriptionExpiry: newDate } : u));
+    setUsers(users.map(u => u.id === userId ? { ...u, subscriptionExpiry: newDate } : u));
   };
 
   const renewLicense = (userId: string, duration: '1m' | '3m' | '1y') => {
-    const user = appUsers.find(u => u.id === userId);
+    const user = users.find(u => u.id === userId);
     if (!user) return;
     const currentExpiry = user.subscriptionExpiry ? new Date(user.subscriptionExpiry) : new Date();
     
@@ -32,12 +38,7 @@ const DevPortal: React.FC<DevPortalProps> = ({ primaryColorHex, registrations: i
   };
 
   const toggleUserActive = (userId: string) => {
-    setAppUsers(prev => prev.map(u => u.id === userId ? { ...u, isSubscribed: !u.isSubscribed } : u));
-  };
-
-  const handleApproval = (regId: string, status: 'approved' | 'rejected') => {
-    setAppRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
-    alert(`Status pendaftaran telah diupdate ke ${status}.`);
+    setUsers(users.map(u => u.id === userId ? { ...u, isSubscribed: !u.isSubscribed } : u));
   };
 
   return (
@@ -50,7 +51,7 @@ const DevPortal: React.FC<DevPortalProps> = ({ primaryColorHex, registrations: i
            </div>
            <div className="px-8 py-4 bg-white border border-blue-100 rounded-3xl text-center shadow-sm">
               <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60">Total Verified Users</p>
-              <p className="text-3xl font-black">{appUsers.length}</p>
+              <p className="text-3xl font-black">{users.length}</p>
            </div>
         </div>
       </div>
@@ -71,7 +72,7 @@ const DevPortal: React.FC<DevPortalProps> = ({ primaryColorHex, registrations: i
                  </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                 {appRegistrations.map(r => (
+                 {registrations.map(r => (
                     <tr key={r.id} className="hover:bg-gray-50 transition-all">
                        <td className="px-10 py-6">
                           <div>
@@ -89,14 +90,26 @@ const DevPortal: React.FC<DevPortalProps> = ({ primaryColorHex, registrations: i
                        <td className="px-10 py-6 flex justify-center gap-3">
                           {r.status === 'pending' && (
                              <>
-                                <button onClick={() => handleApproval(r.id, 'approved')} className="p-2 bg-emerald-100 text-emerald-500 rounded-xl hover:scale-110 transition-all"><CheckCircle size={20}/></button>
-                                <button onClick={() => handleApproval(r.id, 'rejected')} className="p-2 bg-rose-100 text-rose-500 rounded-xl hover:scale-110 transition-all"><XCircle size={20}/></button>
+                                <button 
+                                  onClick={() => onRegistrationAction(r.id, 'approved')} 
+                                  className="p-2 bg-emerald-100 text-emerald-500 rounded-xl hover:scale-110 transition-all"
+                                  title="Approve & Grant Access"
+                                >
+                                  <CheckCircle size={20}/>
+                                </button>
+                                <button 
+                                  onClick={() => onRegistrationAction(r.id, 'rejected')} 
+                                  className="p-2 bg-rose-100 text-rose-500 rounded-xl hover:scale-110 transition-all"
+                                  title="Reject Request"
+                                >
+                                  <XCircle size={20}/>
+                                </button>
                              </>
                           )}
                        </td>
                     </tr>
                  ))}
-                 {appRegistrations.length === 0 && (
+                 {registrations.length === 0 && (
                     <tr><td colSpan={4} className="py-12 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest">Tidak ada permintaan pending</td></tr>
                  )}
               </tbody>
@@ -127,7 +140,7 @@ const DevPortal: React.FC<DevPortalProps> = ({ primaryColorHex, registrations: i
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-               {appUsers.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
+               {users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
                  <tr key={u.id} className="hover:bg-gray-50/50 transition-all">
                     <td className="px-10 py-8">
                        <div className="flex items-center gap-5">
