@@ -21,18 +21,22 @@ const StatCard = ({ title, value, change, icon: Icon, colorSet }: any) => (
       <div className={`p-3 rounded-2xl ${colorSet.light} ${colorSet.text}`}>
         <Icon size={24} />
       </div>
-      <div className={`flex items-center gap-1 text-[10px] font-black px-3 py-1 rounded-full ${change >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+      <div className={`flex items-center gap-1 text-[10px] font-black px-3 py-1 rounded-full ${change >= 0 ? 'bg-emerald-50 text-emerald-400' : 'bg-rose-50 text-rose-400'}`}>
         {change >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
         {Math.abs(change)}%
       </div>
     </div>
-    <h3 className="text-gray-400 text-[10px] font-black uppercase tracking-widest">{title}</h3>
+    <h3 className="text-gray-300 text-[10px] font-black uppercase tracking-widest">{title}</h3>
     <p className="text-3xl font-black text-gray-900 mt-1">{value}</p>
   </div>
 );
 
 const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => {
   const colorSet = THEME_COLORS[primaryColor] || THEME_COLORS.blue;
+
+  // Pastel Chart Colors
+  const chartColorMain = '#93C5FD'; // Pastel blue
+  const chartColorSecondary = '#F1F5F9'; // Light gray
 
   return (
     <div className="space-y-8 animate-slide">
@@ -43,7 +47,7 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
         </div>
         <div className="flex gap-4">
           <button className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-900 shadow-sm hover:bg-gray-50 transition-all">Export</button>
-          <button className={`px-6 py-3 ${colorSet.bg} text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all`}>Schedule New</button>
+          <button className={`px-6 py-3 ${colorSet.bg} ${colorSet.text} rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-sm active:scale-95 transition-all hover:brightness-95`}>Schedule New</button>
         </div>
       </div>
 
@@ -61,11 +65,11 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 10}} />
-                <Tooltip cursor={{fill: 'rgba(0,0,0,0.02)'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' }} />
-                <Bar dataKey="engagement" fill={colorSet.text.replace('text-', '#').replace('600', '400')} radius={[6, 6, 0, 0]} />
-                <Bar dataKey="reach" fill="#e2e8f0" radius={[6, 6, 0, 0]} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#cbd5e1', fontSize: 10}} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: '#cbd5e1', fontSize: 10}} />
+                <Tooltip cursor={{fill: 'rgba(0,0,0,0.02)'}} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)' }} />
+                <Bar dataKey="engagement" fill={chartColorMain} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="reach" fill={chartColorSecondary} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -76,18 +80,18 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center gap-4 p-4 rounded-3xl border border-gray-50 hover:bg-gray-50 transition-all cursor-pointer">
-                <div className={`w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center ${colorSet.text}`}>
+                <div className={`w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center ${colorSet.text}`}>
                   <CalendarIcon size={24} />
                 </div>
                 <div className="flex-1">
                   <h4 className="font-black text-gray-900 text-xs uppercase tracking-tight">Campaign Reveal #{i}</h4>
-                  <p className="text-[10px] text-gray-400 font-bold mt-0.5">Oct 28, 2023 • 10:00 AM</p>
+                  <p className="text-[10px] text-gray-300 font-bold mt-0.5">Oct 28, 2023 • 10:00 AM</p>
                 </div>
-                <span className="px-3 py-1 bg-amber-50 text-amber-600 text-[8px] font-black uppercase tracking-widest rounded-lg">Wait</span>
+                <span className="px-3 py-1 bg-amber-50 text-amber-400 text-[8px] font-black uppercase tracking-widest rounded-lg">Wait</span>
               </div>
             ))}
           </div>
-          <button className={`w-full mt-6 py-4 rounded-2xl border-2 border-dashed border-gray-200 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:bg-gray-50 transition-all`}>View Full Calendar</button>
+          <button className={`w-full mt-6 py-4 rounded-2xl border-2 border-dashed border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-300 hover:bg-gray-50 transition-all`}>View Full Calendar</button>
         </div>
       </div>
     </div>

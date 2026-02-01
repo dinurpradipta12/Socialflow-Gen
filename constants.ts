@@ -2,11 +2,11 @@
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
 export const THEME_COLORS = {
-  blue: { bg: 'bg-blue-600', text: 'text-blue-600', border: 'border-blue-600', light: 'bg-blue-50', hover: 'hover:bg-blue-700' },
-  purple: { bg: 'bg-purple-600', text: 'text-purple-600', border: 'border-purple-600', light: 'bg-purple-50', hover: 'hover:bg-purple-700' },
-  emerald: { bg: 'bg-emerald-600', text: 'text-emerald-600', border: 'border-emerald-600', light: 'bg-emerald-50', hover: 'hover:bg-emerald-700' },
-  rose: { bg: 'bg-rose-600', text: 'text-rose-600', border: 'border-rose-600', light: 'bg-rose-50', hover: 'hover:bg-rose-700' },
-  slate: { bg: 'bg-slate-800', text: 'text-slate-800', border: 'border-slate-800', light: 'bg-slate-50', hover: 'hover:bg-slate-900' },
+  blue: { bg: 'bg-blue-100', text: 'text-blue-500', border: 'border-blue-200', light: 'bg-blue-50', hover: 'hover:bg-blue-200' },
+  purple: { bg: 'bg-purple-100', text: 'text-purple-500', border: 'border-purple-200', light: 'bg-purple-50', hover: 'hover:bg-purple-200' },
+  emerald: { bg: 'bg-emerald-100', text: 'text-emerald-500', border: 'border-emerald-200', light: 'bg-emerald-50', hover: 'hover:bg-emerald-200' },
+  rose: { bg: 'bg-rose-100', text: 'text-rose-500', border: 'border-rose-200', light: 'bg-rose-50', hover: 'hover:bg-rose-200' },
+  slate: { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', light: 'bg-slate-50', hover: 'hover:bg-slate-200' },
 };
 
 const FULL_PERMISSIONS: Permissions = {
@@ -72,7 +72,6 @@ export const MOCK_REGISTRATIONS: RegistrationRequest[] = [
 export const MOCK_CONTENT_PLANS: ContentPlanItem[] = [
   {
     id: 'cp1',
-    // Fixed: 'Scheduled' is not valid for ContentPlanItem status, using 'Dijadwalkan'
     status: 'Dijadwalkan',
     value: 'Educational',
     pillar: 'Tech Tips',
