@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ThemeColor, Workspace, User, Message, SystemNotification, PostInsight } from './types';
 import { MOCK_WORKSPACES, MOCK_USERS, THEME_COLORS, DEV_CREDENTIALS, MOCK_MESSAGES } from './constants';
@@ -46,7 +47,6 @@ const App: React.FC = () => {
   useEffect(() => {
     document.documentElement.style.setProperty('--primary-color', primaryColorHex);
     document.documentElement.style.setProperty('--accent-color', accentColorHex);
-    // Explicitly remove dark class if it ever exists
     document.documentElement.classList.remove('dark');
   }, [primaryColorHex, accentColorHex]);
 
@@ -80,7 +80,6 @@ const App: React.FC = () => {
     setUser(null);
   };
 
-  // Guard for null user or non-authenticated state
   if (authState !== 'authenticated' || !user) {
     return (
       <div className="min-h-screen bg-[#fcfcfd] flex items-center justify-center p-6 overflow-hidden">
