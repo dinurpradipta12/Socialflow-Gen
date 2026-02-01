@@ -2,15 +2,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PostInsight } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+/**
+ * Fungsi pembantu untuk inisialisasi AI secara dinamis.
+ * Ini mencegah error jika process.env.API_KEY belum tersedia saat modul pertama kali di-load.
+ */
+function getAIClient() {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY tidak ditemukan di environment. Pastikan sudah diset di Cloudflare Dashboard.");
+  }
+  return new GoogleGenAI({ apiKey });
+}
 
 export async function scrapePostInsights(url: string): Promise<PostInsight> {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Analisis URL media sosial berikut dan simulasikan pengambilan data wawasannya. 
-    PENTING: Berikan analisis dalam bahasa Indonesia yang profesional.
+    contents: `Analisis URL media sosial berikut dan simulasikan pengambilan data wawasannya secara mendalam. 
+    PENTING: Berikan analisis dalam bahasa Indonesia yang sangat profesional dan teknis.
     URL: ${url}. 
-    Berikan data performa yang realistis namun simulasi.`,
+    Berikan data performa (likes, comments, shares) yang realistis berdasarkan jenis platform dari URL tersebut.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -30,14 +41,21 @@ export async function scrapePostInsights(url: string): Promise<PostInsight> {
     }
   });
 
-  return JSON.parse(response.text);
+  const text = response.text;
+  if (!text) throw new Error("Gagal mendapatkan respon dari AI.");
+  return JSON.parse(text);
 }
 
 export async function generateKPIReport(data: any): Promise<string> {
+  const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Berdasarkan data ini: ${JSON.stringify(data)}, buatkan laporan ringkasan eksekutif profesional untuk KPI media sosial dalam Bahasa Indonesia. Sertakan kekuatan, kelemahan, dan 3 rekomendasi yang dapat ditindaklanjuti.`,
+    contents: `Berdasarkan kumpulan data performa ini: ${JSON.stringify(data)}, buatkan laporan ringkasan eksekutif (Executive Summary) profesional untuk KPI media sosial dalam Bahasa Indonesia. 
+    Laporan harus berisi:
+    1. Ringkasan Performa Saat Ini.
+    2. Identifikasi Kekuatan dan Kelemahan konten.
+    3. 3 Rekomendasi strategis yang dapat langsung dieksekusi tim kreatif.`,
   });
 
-  return response.text;
+  return response.text || "Gagal menghasilkan laporan.";
 }
