@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, RegistrationRequest } from '../types';
-import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2, Link2, Globe, Server } from 'lucide-react';
+import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2, Link2, Globe, Server, Code, Copy, Info } from 'lucide-react';
 
 interface DevPortalProps {
   primaryColorHex: string;
@@ -12,7 +12,48 @@ interface DevPortalProps {
   setRegistrations: (regs: RegistrationRequest[]) => void;
   dbSourceUrl: string;
   setDbSourceUrl: (url: string) => void;
+  onManualSync: () => void;
 }
+
+const APPS_SCRIPT_CODE = `
+// Paste this code into Extensions > Apps Script in Google Sheets
+const SPREADSHEET_ID = 'PASTE_YOUR_ID_HERE';
+const SHEET_NAME = 'Registrations';
+
+function doGet(e) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const rows = data.slice(1);
+  
+  const result = rows.map(row => {
+    let obj = {};
+    headers.forEach((header, i) => obj[header] = row[i]);
+    return obj;
+  });
+  
+  return ContentService.createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  const params = JSON.parse(e.postData.contents);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  
+  if (params.action === 'register') {
+    sheet.appendRow([params.id, params.name, params.email, params.password, params.timestamp, 'pending']);
+  } else if (params.action === 'updateStatus') {
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] == params.id) {
+        sheet.getRange(i + 1, 6).setValue(params.status);
+        break;
+      }
+    }
+  }
+  return ContentService.createTextOutput("Success");
+}
+`;
 
 const DevPortal: React.FC<DevPortalProps> = ({ 
   primaryColorHex, 
@@ -22,29 +63,25 @@ const DevPortal: React.FC<DevPortalProps> = ({
   setUsers,
   setRegistrations,
   dbSourceUrl,
-  setDbSourceUrl
+  setDbSourceUrl,
+  onManualSync
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showDbSettings, setShowDbSettings] = useState(false);
+  const [showScriptInfo, setShowScriptInfo] = useState(false);
   const [tempUrl, setTempUrl] = useState(dbSourceUrl);
 
   const handleRefreshDatabase = () => {
     setIsRefreshing(true);
-    // Mensimulasikan fetch ulang data dari storage yang mungkin telah diupdate oleh user lain via Cloud
-    setTimeout(() => {
-      const savedRegs = localStorage.getItem('sf_registrations_db');
-      if (savedRegs) setRegistrations(JSON.parse(savedRegs));
-      const savedUsers = localStorage.getItem('sf_users_db');
-      if (savedUsers) setUsers(JSON.parse(savedUsers));
-      setIsRefreshing(false);
-    }, 1500);
+    onManualSync();
+    setTimeout(() => setIsRefreshing(false), 2000);
   };
 
   const saveDbConfig = () => {
     setDbSourceUrl(tempUrl);
     setShowDbSettings(false);
-    alert("Database Source diperbarui. Sistem akan melakukan sinkronisasi otomatis.");
+    alert("Database Source diperbarui. Silakan refresh jika data tidak muncul.");
   };
 
   const handleDateChange = (userId: string, newDate: string) => {
@@ -57,6 +94,11 @@ const DevPortal: React.FC<DevPortalProps> = ({
     const updated = users.map(u => u.id === userId ? { ...u, isSubscribed: !u.isSubscribed } : u);
     setUsers(updated);
     localStorage.setItem('sf_users_db', JSON.stringify(updated));
+  };
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(APPS_SCRIPT_CODE);
+    alert("Kode disalin! Tempel di Google Apps Script.");
   };
 
   return (
@@ -76,18 +118,24 @@ const DevPortal: React.FC<DevPortalProps> = ({
            <div className="flex gap-4">
              <button 
                onClick={() => setShowDbSettings(!showDbSettings)}
-               className="p-4 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all group"
+               className={`p-4 rounded-2xl transition-all group ${showDbSettings ? 'bg-blue-500 text-white' : 'bg-white/5 border border-white/10'}`}
              >
-                <Server size={20} className="text-gray-400 group-hover:text-white" />
+                <Server size={20} />
+             </button>
+             <button 
+               onClick={() => setShowScriptInfo(!showScriptInfo)}
+               className={`p-4 rounded-2xl transition-all group ${showScriptInfo ? 'bg-amber-500 text-white' : 'bg-white/5 border border-white/10'}`}
+             >
+                <Code size={20} />
              </button>
              <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-3xl text-center backdrop-blur-md">
                 <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60">Pending</p>
                 <p className="text-3xl font-black text-amber-400">{registrations.filter(r => r.status === 'pending').length}</p>
              </div>
-           </div>
         </div>
+      </div>
 
-        {showDbSettings && (
+      {showDbSettings && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide">
              <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2"><Globe size={14}/> External Database Source (Google Sheets Bridge)</h3>
              <div className="flex gap-3">
@@ -95,11 +143,23 @@ const DevPortal: React.FC<DevPortalProps> = ({
                   value={tempUrl} 
                   onChange={e => setTempUrl(e.target.value)}
                   placeholder="Paste Google Apps Script URL here..." 
-                  className="flex-1 bg-black/20 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 transition-all"
+                  className="flex-1 bg-black/20 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 transition-all text-blue-300"
                 />
                 <button onClick={saveDbConfig} className="px-8 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Connect</button>
              </div>
-             <p className="mt-3 text-[9px] text-gray-500 italic">Gunakan URL Web App dari Google Apps Script untuk menghubungkan data lintas user secara real-time.</p>
+             <p className="mt-4 text-[10px] text-amber-400 flex items-center gap-2 font-bold"><Info size={14}/> Pastikan Google Sheet Anda memiliki kolom: id, name, email, password, timestamp, status.</p>
+          </div>
+        )}
+
+        {showScriptInfo && (
+          <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide space-y-4">
+             <div className="flex justify-between items-center">
+                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2"><Code size={14}/> Google Apps Script Template</h3>
+                <button onClick={copyCode} className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-xl text-[10px] font-black hover:bg-white/20 transition-all"><Copy size={14}/> Copy Code</button>
+             </div>
+             <pre className="p-6 bg-black/40 rounded-2xl text-[10px] font-mono text-blue-200 overflow-x-auto border border-white/5 max-h-60 custom-scrollbar leading-relaxed">
+                {APPS_SCRIPT_CODE}
+             </pre>
           </div>
         )}
       </div>
@@ -116,7 +176,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
             className="flex items-center gap-2 px-6 py-2 bg-gray-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-sm active:scale-95"
           >
             {isRefreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            <span>Refresh Real-time</span>
+            <span>Sync Sekarang</span>
           </button>
         </div>
         

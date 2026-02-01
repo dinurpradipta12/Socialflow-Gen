@@ -28,7 +28,6 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Fix: Added missing state variables for login and registration forms
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [regName, setRegName] = useState('');
@@ -66,92 +65,93 @@ const App: React.FC = () => {
   const prevRegCount = useRef(registrations.length);
   const isDev = user?.role === 'developer';
 
-  // SINKRONISASI REAL-TIME LINTAS TAB (CROSS-TAB SYNC)
+  // SINKRONISASI REAL-TIME LINTAS TAB
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'sf_registrations_db' && e.newValue) {
         const newRegs = JSON.parse(e.newValue);
         setRegistrations(newRegs);
-        
-        // Cek jika ada penambahan data baru untuk notifikasi dev
-        const pending = newRegs.find((r: RegistrationRequest) => r.status === 'pending');
-        if (isDev && pending && newRegs.length > prevRegCount.current) {
-          setDevNotif(pending);
-        }
-        prevRegCount.current = newRegs.length;
       }
-      if (e.key === 'sf_users_db' && e.newValue) setAllUsers(JSON.parse(e.newValue));
     };
-
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
-  }, [isDev]);
-
-  // CLOUD DATABASE POLLING (SINKRONISASI GOOGLE SHEETS / EXTERNAL)
-  useEffect(() => {
-    if (!dbSourceUrl) return;
-
-    const syncWithCloud = async () => {
-      setIsSyncing(true);
-      try {
-        // Simulasi fetching dari Google Sheets Apps Script
-        // Di dunia nyata: const res = await fetch(dbSourceUrl); const data = await res.json();
-        console.log("Syncing with Cloud DB:", dbSourceUrl);
-        
-        // Trigger update state lokal agar sinkron dengan 'Cloud'
-        const savedRegs = localStorage.getItem('sf_registrations_db');
-        if (savedRegs) {
-          const parsed = JSON.parse(savedRegs);
-          setRegistrations(parsed);
-          
-          if (isDev && parsed.length > prevRegCount.current) {
-             const newest = parsed.find((r: any) => r.status === 'pending');
-             if (newest) setDevNotif(newest);
-          }
-          prevRegCount.current = parsed.length;
-        }
-      } catch (err) {
-        console.error("Cloud Sync Failed", err);
-      } finally {
-        setTimeout(() => setIsSyncing(false), 1000);
-      }
-    };
-
-    const interval = setInterval(syncWithCloud, 10000); // Poll setiap 10 detik
-    return () => clearInterval(interval);
-  }, [dbSourceUrl, isDev]);
-
-  // Handle Registration Action
-  const handleRegistrationAction = useCallback((regId: string, status: 'approved' | 'rejected') => {
-    setRegistrations(prev => {
-      const updated = prev.map(r => r.id === regId ? { ...r, status } : r);
-      localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
-      
-      if (status === 'approved') {
-        const reg = prev.find(r => r.id === regId);
-        if (reg) {
-          const newUser: User = {
-            id: `U-${Date.now()}`,
-            name: reg.name,
-            email: reg.email,
-            role: 'viewer',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
-            permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: false },
-            isSubscribed: true,
-            subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-            jobdesk: 'New Member', kpi: [], activityLogs: [], performanceScore: 0
-          };
-          setAllUsers(prevUsers => {
-            const updatedUsers = [...prevUsers, newUser];
-            localStorage.setItem('sf_users_db', JSON.stringify(updatedUsers));
-            return updatedUsers;
-          });
-        }
-      }
-      return updated;
-    });
-    setDevNotif(null);
   }, []);
+
+  // CLOUD DATABASE SYNC LOGIC (FETCH & POST)
+  const syncWithCloud = useCallback(async (isManual = false) => {
+    if (!dbSourceUrl) return;
+    if (!isManual && isSyncing) return;
+
+    setIsSyncing(true);
+    try {
+      // Menambahkan cache buster agar tidak kena cache browser
+      const response = await fetch(`${dbSourceUrl}?action=getRegistrations&t=${Date.now()}`);
+      if (!response.ok) throw new Error("Network response was not ok");
+      
+      const cloudData = await response.json();
+      if (Array.isArray(cloudData)) {
+        setRegistrations(cloudData);
+        localStorage.setItem('sf_registrations_db', JSON.stringify(cloudData));
+        
+        // Cek jika ada penambahan pendaftar baru untuk notifikasi dev
+        if (isDev && cloudData.length > prevRegCount.current) {
+          const pending = cloudData.find(r => r.status === 'pending');
+          if (pending) setDevNotif(pending);
+        }
+        prevRegCount.current = cloudData.length;
+      }
+    } catch (err) {
+      console.warn("Cloud Sync Polling: Spreadsheet mungkin belum disetup atau URL salah.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [dbSourceUrl, isDev, isSyncing]);
+
+  useEffect(() => {
+    if (dbSourceUrl) {
+      syncWithCloud();
+      const interval = setInterval(() => syncWithCloud(), 15000); // Polling setiap 15 detik
+      return () => clearInterval(interval);
+    }
+  }, [dbSourceUrl, syncWithCloud]);
+
+  const handleRegistrationAction = useCallback(async (regId: string, status: 'approved' | 'rejected') => {
+    const updated = registrations.map(r => r.id === regId ? { ...r, status } : r);
+    setRegistrations(updated);
+    localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
+
+    // Update ke Cloud jika ada URL
+    if (dbSourceUrl) {
+      try {
+        await fetch(dbSourceUrl, {
+          method: 'POST',
+          mode: 'no-cors', // Apps Script biasanya butuh no-cors untuk simple POST
+          body: JSON.stringify({ action: 'updateStatus', id: regId, status })
+        });
+      } catch (e) { console.error("Update Cloud Error", e); }
+    }
+    
+    if (status === 'approved') {
+      const reg = registrations.find(r => r.id === regId);
+      if (reg) {
+        const newUser: User = {
+          id: `U-${Date.now()}`,
+          name: reg.name,
+          email: reg.email,
+          role: 'viewer',
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
+          permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: false },
+          isSubscribed: true,
+          subscriptionExpiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          jobdesk: 'New Member', kpi: [], activityLogs: [], performanceScore: 0
+        };
+        const updatedUsers = [...allUsers, newUser];
+        setAllUsers(updatedUsers);
+        localStorage.setItem('sf_users_db', JSON.stringify(updatedUsers));
+      }
+    }
+    setDevNotif(null);
+  }, [registrations, dbSourceUrl, allUsers]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -181,24 +181,39 @@ const App: React.FC = () => {
     }, 1200);
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      const newReg: RegistrationRequest = {
-        id: `REG-${Date.now()}`,
-        name: regName,
-        email: regEmail,
-        password: regPassword,
-        timestamp: new Date().toLocaleString('id-ID'),
-        status: 'pending'
-      };
-      
-      const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
-      const updated = [newReg, ...current];
-      localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
-      setRegistrations(updated);
+    
+    const newReg: RegistrationRequest = {
+      id: `REG-${Date.now()}`,
+      name: regName,
+      email: regEmail,
+      password: regPassword,
+      timestamp: new Date().toLocaleString('id-ID'),
+      status: 'pending'
+    };
 
+    // 1. Simpan Lokal
+    const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
+    const updated = [newReg, ...current];
+    localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
+    setRegistrations(updated);
+
+    // 2. Kirim ke Cloud (Google Sheets) jika URL tersedia
+    if (dbSourceUrl) {
+      try {
+        await fetch(dbSourceUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          body: JSON.stringify({ action: 'register', ...newReg })
+        });
+      } catch (err) {
+        console.error("Cloud Registration Error:", err);
+      }
+    }
+
+    setTimeout(() => {
       alert(`Pendaftaran Berhasil! Menunggu verifikasi Developer.`);
       setAuthState('login');
       setLoading(false);
@@ -288,7 +303,7 @@ const App: React.FC = () => {
           <div className="flex items-center gap-6">
              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isSyncing ? 'bg-blue-50 text-blue-400' : 'bg-emerald-50 text-emerald-400'}`}>
                 {isSyncing ? <Loader2 size={12} className="animate-spin" /> : <Wifi size={12} />}
-                {isSyncing ? 'Cloud Syncing...' : 'Database Live'}
+                {isSyncing ? 'Cloud Syncing...' : (dbSourceUrl ? 'Cloud Connected' : 'Local Only')}
              </div>
              <div className="text-right">
                 <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-end gap-1.5"><CheckCircle size={10} /> Active Session</p>
@@ -318,7 +333,7 @@ const App: React.FC = () => {
           )}
           {activeTab === 'profile' && <Profile user={user} primaryColor={displayWorkspace.color} setUser={setUser} />}
           {activeTab === 'settings' && <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex={accentColorHex} setAccentColorHex={setAccentColorHex} fontSize={fontSize} setFontSize={setFontSize} customLogo={customLogo} setCustomLogo={setCustomLogo} dbSourceUrl={dbSourceUrl} setDbSourceUrl={(url) => { setDbSourceUrl(url); localStorage.setItem('sf_db_source', url); }} />}
-          {activeTab === 'devPortal' && isDev && <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} setRegistrations={setRegistrations} dbSourceUrl={dbSourceUrl} setDbSourceUrl={(url) => { setDbSourceUrl(url); localStorage.setItem('sf_db_source', url); }} />}
+          {activeTab === 'devPortal' && isDev && <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} setRegistrations={setRegistrations} dbSourceUrl={dbSourceUrl} setDbSourceUrl={(url) => { setDbSourceUrl(url); localStorage.setItem('sf_db_source', url); }} onManualSync={() => syncWithCloud(true)} />}
         </div>
       </main>
       <ChatPopup primaryColor={displayWorkspace.color} currentUser={user} messages={messages} onSendMessage={(t) => setMessages([...messages, { id: Date.now().toString(), senderId: user!.id, text: t, timestamp: new Date().toISOString() }])} isOpen={isChatOpen} setIsOpen={setIsChatOpen} unreadCount={0} />
