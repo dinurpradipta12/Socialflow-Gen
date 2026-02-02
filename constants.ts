@@ -1,6 +1,8 @@
 
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
+export const APP_VERSION = '2.9.5'; // Versi aplikasi saat ini
+
 export const THEME_COLORS = {
   blue: { bg: 'bg-blue-100', text: 'text-blue-500', border: 'border-blue-200', light: 'bg-blue-50', hover: 'hover:bg-blue-200' },
   purple: { bg: 'bg-purple-100', text: 'text-purple-500', border: 'border-purple-200', light: 'bg-purple-50', hover: 'hover:bg-purple-200' },
@@ -92,7 +94,6 @@ export const MOCK_WORKSPACES: Workspace[] = [
     color: 'blue', 
     members: MOCK_USERS,
     inviteCode: 'sf-snaillabs-2025',
-    // Added missing ownerId property to satisfy Workspace interface
     ownerId: '1'
   },
 ];

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeColor, Workspace, User, Message, SystemNotification, PostInsight, RegistrationRequest, Permissions } from './types';
-import { MOCK_WORKSPACES, MOCK_USERS, THEME_COLORS, DEV_CREDENTIALS, MOCK_MESSAGES, MOCK_REGISTRATIONS } from './constants';
+import { MOCK_WORKSPACES, MOCK_USERS, THEME_COLORS, DEV_CREDENTIALS, MOCK_MESSAGES, MOCK_REGISTRATIONS, APP_VERSION } from './constants';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Calendar from './components/Calendar';
@@ -15,7 +15,7 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import TopNotification from './components/TopNotification';
-import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon, Wifi, WifiOff, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon, Wifi, WifiOff, AlertTriangle, RefreshCw, Sparkles, DownloadCloud } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -63,6 +63,10 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>(localStorage.getItem('sf_last_sync') || 'Never');
+  
+  // Version Control State
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [cloudVersion, setCloudVersion] = useState<string | null>(null);
 
   const prevRegCount = useRef(registrations.length);
   const isDev = user?.role === 'developer';
@@ -88,20 +92,36 @@ const App: React.FC = () => {
       clearTimeout(timeoutId);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const cloudData = await res.json();
+      const responseData = await res.json();
       
-      if (Array.isArray(cloudData)) {
-        setRegistrations(cloudData);
-        localStorage.setItem('sf_registrations_db', JSON.stringify(cloudData));
+      // Handle response that contains both registrations and app version
+      let cloudRegs = [];
+      let latestVer = null;
+
+      if (Array.isArray(responseData)) {
+        cloudRegs = responseData;
+      } else if (responseData.registrations) {
+        cloudRegs = responseData.registrations;
+        latestVer = responseData.app_version;
+      }
+
+      if (latestVer && latestVer !== APP_VERSION) {
+        setCloudVersion(latestVer);
+        setUpdateAvailable(true);
+      }
+
+      if (Array.isArray(cloudRegs)) {
+        setRegistrations(cloudRegs);
+        localStorage.setItem('sf_registrations_db', JSON.stringify(cloudRegs));
         const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         setLastSyncTime(now);
         localStorage.setItem('sf_last_sync', now);
         
-        if (isDev && cloudData.length > prevRegCount.current) {
-          const newest = cloudData.filter(r => r.status === 'pending')[0];
+        if (isDev && cloudRegs.length > prevRegCount.current) {
+          const newest = cloudRegs.filter(r => r.status === 'pending')[0];
           if (newest) setDevNotif(newest);
         }
-        prevRegCount.current = cloudData.length;
+        prevRegCount.current = cloudRegs.length;
       }
     } catch (err: any) {
       setSyncError(err.name === 'AbortError' ? "Cloud Slow" : (err.message || "Sync Error"));
@@ -110,24 +130,28 @@ const App: React.FC = () => {
     }
   }, [dbSourceUrl, isDev, isSyncing]);
 
-  // Efek untuk Polling Berfrekuensi Tinggi di Dev Portal
   useEffect(() => {
     if (dbSourceUrl) {
       syncWithCloud();
-      // Jika di tab devPortal, sync setiap 10 detik. Jika tidak, setiap 3 menit.
       const intervalTime = activeTab === 'devPortal' ? 10000 : 180000;
       const interval = setInterval(() => syncWithCloud(), intervalTime);
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud, activeTab]);
 
+  const handleUpdateApp = () => {
+    setLoading(true);
+    // Force reload with clear cache
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  };
+
   const handleRegistrationAction = useCallback(async (regId: string, status: 'approved' | 'rejected') => {
-    // 1. Update UI Lokal secara Instan
     const updated = registrations.map(r => r.id === regId ? { ...r, status } : r);
     setRegistrations(updated);
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
 
-    // 2. Kirim ke Cloud segera
     if (dbSourceUrl) {
       try {
         const params = new URLSearchParams();
@@ -135,16 +159,13 @@ const App: React.FC = () => {
         params.append('id', regId);
         params.append('status', status);
 
-        // Gunakan fetch tanpa menunggu (Fire and forget) untuk kecepatan UI
         fetch(`${dbSourceUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' })
           .then(() => {
-            // Setelah kirim, tarik data terbaru untuk memastikan sinkronisasi
             setTimeout(() => syncWithCloud(true), 2000);
           });
       } catch (e) { console.error("Cloud Update Error", e); }
     }
     
-    // 3. Jika disetujui, tambahkan ke User List lokal
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
       if (reg) {
@@ -208,13 +229,11 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
-    // 1. Simpan Lokal Instan
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
-    // 2. Push ke Cloud
     if (dbSourceUrl && dbSourceUrl.includes('/exec')) {
       const params = new URLSearchParams();
       params.append('action', 'register');
@@ -315,6 +334,9 @@ const App: React.FC = () => {
             </button>
             <button type="button" onClick={() => setAuthState('register')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-400">Daftar Akun Baru</button>
           </form>
+          <div className="pt-4 border-t border-gray-50 text-center">
+            <p className="text-[9px] font-black text-gray-200 uppercase tracking-widest">Version {APP_VERSION}</p>
+          </div>
         </div>
       </div>
     );
@@ -358,6 +380,27 @@ const App: React.FC = () => {
             appLogo={customLogo}
           />
           <main className="flex-1 ml-72 p-10 min-h-screen overflow-x-hidden">
+            {/* Update Banner */}
+            {updateAvailable && (
+              <div className="mb-8 p-4 bg-gradient-to-r from-blue-600 to-blue-400 text-white rounded-[2rem] shadow-xl flex items-center justify-between animate-slide border-4 border-white ring-1 ring-blue-100">
+                <div className="flex items-center gap-4 pl-4">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center animate-bounce">
+                    <Sparkles size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Update Terdeteksi</p>
+                    <p className="text-sm font-black">Versi {cloudVersion} sudah tersedia. Silakan perbarui untuk fitur terbaru.</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={handleUpdateApp}
+                  className="mr-2 px-6 py-3 bg-white text-blue-600 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2 hover:scale-105 transition-all active:scale-95"
+                >
+                  <DownloadCloud size={16} /> Perbarui Sekarang
+                </button>
+              </div>
+            )}
+
             <header className="flex justify-between items-center mb-10">
               <div className="flex items-center gap-4">
                 <button className="p-3 rounded-2xl bg-white border border-gray-100 shadow-sm relative"><Bell size={18} className="text-gray-400" /></button>
@@ -377,7 +420,7 @@ const App: React.FC = () => {
                  </button>
                  <div className="text-right">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-end gap-1.5">Last Sync: {lastSyncTime}</p>
-                    <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">Snaillabs V2.9</p>
+                    <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">Snaillabs V{APP_VERSION}</p>
                  </div>
               </div>
             </header>

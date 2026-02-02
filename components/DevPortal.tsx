@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { User, RegistrationRequest } from '../types';
 import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2, Link2, Globe, Server, Code, Copy, Info, Clock, Zap } from 'lucide-react';
+import { APP_VERSION } from '../constants';
 
 interface DevPortalProps {
   primaryColorHex: string;
@@ -18,12 +19,12 @@ interface DevPortalProps {
 
 const APPS_SCRIPT_CODE = `
 /**
- * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2.9 - TURBO SYNC)
+ * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2.9.5 - VERSION SYNC)
  * 1. Extensions > Apps Script > Paste This.
  * 2. Sheet name must be: "Registrations"
- * 3. Baris 1: id | name | email | password | timestamp | status
- * 4. Deploy > New Deployment > Web App > Me > Anyone.
  */
+
+var CURRENT_APP_VERSION = "${APP_VERSION}"; // Ubah ini di script jika ingin memicu update di user
 
 function doGet(e) {
   var action = e.parameter.action;
@@ -52,7 +53,7 @@ function doGet(e) {
           }
         }
       }
-      return createResponse({status: "Success"});
+      return createResponse({status: "Success", app_version: CURRENT_APP_VERSION});
     }
 
     if (action === 'getRegistrations') {
@@ -67,23 +68,24 @@ function doGet(e) {
         });
         return obj;
       });
-      return createResponse(result);
+      
+      // Response dibungkus agar membawa data versi
+      return createResponse({
+        registrations: result,
+        app_version: CURRENT_APP_VERSION
+      });
     }
   } catch (err) {
     return createResponse({error: err.message});
   }
 
-  return ContentService.createTextOutput("Socialflow Backend V2.9 Active");
+  return ContentService.createTextOutput("Socialflow Backend Active");
 }
 
 function createResponse(data) {
   var output = JSON.stringify(data);
   return ContentService.createTextOutput(output)
     .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  return doGet(e);
 }
 `;
 
@@ -123,7 +125,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
   const copyCode = () => {
     navigator.clipboard.writeText(APPS_SCRIPT_CODE);
-    alert("Kode Turbo-Sync V2.9 disalin!");
+    alert("Kode Version-Sync V2.9.5 disalin!");
   };
 
   return (
@@ -139,7 +141,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                  <p className="text-gray-400 font-medium">Panel Kontrol Cloud Socialflow.</p>
                  <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/20 rounded-full border border-blue-400/30">
                     <Zap size={10} className="text-blue-300 animate-pulse" />
-                    <span className="text-[8px] font-black uppercase tracking-widest text-blue-300">Turbo Sync Active (10s)</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-blue-300">Live Update Monitoring (V{APP_VERSION})</span>
                  </div>
               </div>
            </div>
@@ -148,7 +150,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
              <button onClick={() => setShowScriptInfo(!showScriptInfo)} className={`p-4 rounded-2xl transition-all ${showScriptInfo ? 'bg-amber-500 shadow-lg' : 'bg-white/5 border border-white/10'}`}><Code size={20} /></button>
              <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-3xl text-center">
                 <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-300">Pendaftar</p>
-                {/* Fix: use consistent lowercase comparison to satisfy TS strict typing and handle external data variations */}
                 <p className="text-3xl font-black">{registrations.filter(r => (r.status || '').toLowerCase() === 'pending').length}</p>
              </div>
            </div>
@@ -167,7 +168,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
         {showScriptInfo && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide space-y-4">
              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-amber-400"><Code size={14}/> Turbo-Sync V2.9 Script</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-amber-400"><Code size={14}/> Version-Sync Script</h3>
                 <button onClick={copyCode} className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-[10px] font-black hover:bg-amber-500/30 transition-all"><Copy size={14}/> Copy Code</button>
              </div>
              <pre className="p-6 bg-black/40 rounded-2xl text-[10px] font-mono text-amber-100 overflow-x-auto border border-white/5 max-h-60 custom-scrollbar leading-relaxed">
