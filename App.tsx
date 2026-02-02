@@ -15,7 +15,7 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import { cloudService } from './services/cloudService';
-import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle } from 'lucide-react';
 
 const cloudSyncChannel = new BroadcastChannel('sf_cloud_sync');
 
@@ -36,6 +36,12 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // States for Change Password Logic
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [tempLoginUser, setTempLoginUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -106,7 +112,8 @@ const App: React.FC = () => {
             kpi: [],
             activityLogs: [],
             performanceScore: 0,
-            socialMedia: reg.handle
+            socialMedia: reg.handle,
+            requiresPasswordChange: true // WAJIB GANTI PASSWORD
           };
           setAllUsers(prev => [...prev, newUser]);
           alert(`Akun ${reg.name} berhasil dibuat!`);
@@ -122,11 +129,15 @@ const App: React.FC = () => {
     setLoading(true);
     setLoginError(null);
 
+    // TRIM & CLEAN INPUT: Mengatasi masalah spasi saat copy-paste email
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
     setTimeout(() => {
-      const isDevLogin = email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password;
+      const isDevLogin = cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password;
       
-      // Step 1: Cari User
-      const foundUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+      // Step 1: Cari User dengan email yang sudah dibersihkan
+      const foundUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
       
       if (!foundUser) {
         setLoginError("Email belum terdaftar dalam sistem.");
@@ -135,9 +146,19 @@ const App: React.FC = () => {
       }
 
       // Step 2: Validasi Password
-      const isPasswordCorrect = foundUser.password === password || (!foundUser.password && password === 'Social123');
+      const isPasswordCorrect = foundUser.password === cleanPassword || (!foundUser.password && cleanPassword === 'Social123');
       
       if (isDevLogin || isPasswordCorrect) {
+        
+        // CHECK: Apakah user baru perlu ganti password?
+        if (foundUser.requiresPasswordChange) {
+           setTempLoginUser(foundUser);
+           setIsChangePasswordOpen(true);
+           setLoading(false);
+           return;
+        }
+
+        // Login Normal
         setUser(foundUser);
         localStorage.setItem('sf_session_user', JSON.stringify(foundUser));
         
@@ -154,6 +175,38 @@ const App: React.FC = () => {
     }, 1000);
   };
 
+  const handleFinalizePasswordChange = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      alert("Konfirmasi password tidak cocok!");
+      return;
+    }
+    if (newPassword.length < 6) {
+      alert("Password minimal 6 karakter.");
+      return;
+    }
+
+    if (tempLoginUser) {
+      const updatedUser = {
+         ...tempLoginUser,
+         password: newPassword,
+         requiresPasswordChange: false // Flag dinonaktifkan
+      };
+
+      // Update Database
+      const updatedAllUsers = allUsers.map(u => u.id === tempLoginUser.id ? updatedUser : u);
+      setAllUsers(updatedAllUsers);
+      
+      // Auto Login
+      setUser(updatedUser);
+      localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
+      setAuthState('authenticated');
+      
+      setIsChangePasswordOpen(false);
+      setTempLoginUser(null);
+    }
+  };
+
   const saveAnalytics = (insight: PostInsight | PostInsight[]) => {
     const updated = Array.isArray(insight) ? [...insight, ...analyticsData] : [insight, ...analyticsData];
     setAnalyticsData(updated);
@@ -162,6 +215,40 @@ const App: React.FC = () => {
 
   const isDev = user?.role === 'developer';
   const activeWorkspace = MOCK_WORKSPACES[0];
+
+  // --- Change Password Modal UI ---
+  if (isChangePasswordOpen && tempLoginUser) {
+    return (
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 font-sans">
+        <div className="max-w-md w-full bg-white rounded-[3rem] shadow-2xl p-10 space-y-8 border border-gray-100 animate-slide">
+           <div className="text-center space-y-4">
+              <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-blue-100">
+                 <Lock size={32} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-black text-gray-900 tracking-tight">Setup Password Baru</h1>
+                <p className="text-gray-400 text-sm font-medium mt-1">Demi keamanan, silakan ganti password bawaan Anda sebelum melanjutkan.</p>
+              </div>
+           </div>
+
+           <form onSubmit={handleFinalizePasswordChange} className="space-y-6">
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black uppercase text-gray-400 ml-4 tracking-widest">Password Baru</label>
+                 <input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-900 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all" placeholder="Min 6 karakter" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-black uppercase text-gray-400 ml-4 tracking-widest">Konfirmasi Password</label>
+                 <input type="password" required value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-900 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all" placeholder="Ulangi password" />
+              </div>
+              
+              <button type="submit" className="w-full py-6 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3">
+                 <CheckCircle size={18} /> Simpan & Masuk
+              </button>
+           </form>
+        </div>
+      </div>
+    );
+  }
 
   if (authState === 'expired') {
      return (

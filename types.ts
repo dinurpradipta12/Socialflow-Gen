@@ -42,6 +42,7 @@ export interface User {
   birthDate?: string;
   settings?: UserSettings;
   workspaceId?: string;
+  requiresPasswordChange?: boolean; // New Flag for First Login
 }
 
 export interface CloudConfig {

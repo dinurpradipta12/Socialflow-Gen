@@ -102,7 +102,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
       jobdesk: 'Manual Member',
       kpi: [],
       activityLogs: [],
-      performanceScore: 0
+      performanceScore: 0,
+      requiresPasswordChange: true // WAJIB GANTI PASSWORD
     };
 
     // 1. Simpan ke database lokal
