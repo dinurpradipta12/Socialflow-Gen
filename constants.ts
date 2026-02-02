@@ -1,7 +1,7 @@
 
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
-export const APP_VERSION = '2.9.5'; // Versi aplikasi saat ini
+export const APP_VERSION = '2.9.6'; // Versi terbaru dengan perbaikan Write-Reliability
 
 export const THEME_COLORS = {
   blue: { bg: 'bg-blue-100', text: 'text-blue-500', border: 'border-blue-200', light: 'bg-blue-50', hover: 'hover:bg-blue-200' },

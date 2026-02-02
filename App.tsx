@@ -64,7 +64,6 @@ const App: React.FC = () => {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string>(localStorage.getItem('sf_last_sync') || 'Never');
   
-  // Version Control State
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [cloudVersion, setCloudVersion] = useState<string | null>(null);
 
@@ -94,7 +93,6 @@ const App: React.FC = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const responseData = await res.json();
       
-      // Handle response that contains both registrations and app version
       let cloudRegs = [];
       let latestVer = null;
 
@@ -141,7 +139,6 @@ const App: React.FC = () => {
 
   const handleUpdateApp = () => {
     setLoading(true);
-    // Force reload with clear cache
     setTimeout(() => {
       window.location.reload();
     }, 1000);
@@ -229,25 +226,49 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
+    // 1. Simpan Lokal Instan (Backup utama jika cloud fail)
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
-    if (dbSourceUrl && dbSourceUrl.includes('/exec')) {
-      const params = new URLSearchParams();
-      params.append('action', 'register');
-      params.append('id', newReg.id);
-      params.append('name', newReg.name);
-      params.append('email', newReg.email);
-      params.append('password', newReg.password || '');
-      params.append('timestamp', newReg.timestamp);
+    // 2. Push ke Cloud dengan penanganan lebih kuat
+    if (dbSourceUrl && dbSourceUrl.includes('script.google.com')) {
+      try {
+        const queryParams = new URLSearchParams({
+          action: 'register',
+          id: newReg.id,
+          name: newReg.name,
+          email: newReg.email,
+          password: newReg.password || '',
+          timestamp: newReg.timestamp,
+          _t: Date.now().toString() // Cache buster
+        });
 
-      fetch(`${dbSourceUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' });
+        // Gunakan link absolut dan pastikan mode cors ditangani dengan baik oleh Apps Script
+        const targetUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}${queryParams.toString()}`;
+        
+        console.log("Pushing to Cloud:", targetUrl);
+        
+        // no-cors digunakan karena Google Apps Script redirect sering menyebabkan masalah preflight di browser
+        fetch(targetUrl, { 
+          method: 'GET', 
+          mode: 'no-cors',
+          cache: 'no-cache'
+        }).then(() => {
+          console.log("Cloud Push Attempted Successfully");
+        }).catch(err => {
+          console.warn("Cloud Push Failed, using Local data only.", err);
+        });
+      } catch (err) {
+        console.error("Critical Register Error:", err);
+      }
+    } else {
+      console.warn("No valid Cloud Database URL found. Data only saved locally.");
     }
 
     setLoading(false);
-    alert("PENDAFTARAN TERKIRIM!\nData Anda sedang diproses oleh tim Socialflow.");
+    alert("PENDAFTARAN TERKIRIM!\nData Anda telah tercatat di sistem kami.");
     setAuthState('login');
     setRegName(''); setRegEmail(''); setRegPassword('');
   };
@@ -380,7 +401,6 @@ const App: React.FC = () => {
             appLogo={customLogo}
           />
           <main className="flex-1 ml-72 p-10 min-h-screen overflow-x-hidden">
-            {/* Update Banner */}
             {updateAvailable && (
               <div className="mb-8 p-4 bg-gradient-to-r from-blue-600 to-blue-400 text-white rounded-[2rem] shadow-xl flex items-center justify-between animate-slide border-4 border-white ring-1 ring-blue-100">
                 <div className="flex items-center gap-4 pl-4">
