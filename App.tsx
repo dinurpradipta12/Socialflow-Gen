@@ -34,7 +34,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isCloudOnline, setIsCloudOnline] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
   const [email, setEmail] = useState('');
@@ -122,7 +121,6 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      // Logic login: Cek dev credentials dulu, lalu cek database allUsers
       const isDevLogin = email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password;
       const loggedInUser = allUsers.find(u => u.email === email && (isDevLogin || u.password === password || (!u.password && password === 'Social123')));
       
@@ -182,7 +180,7 @@ const App: React.FC = () => {
              <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">SF</div>
              <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Socialflow</h1>
              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-                <ShieldCheck size={12} className="text-blue-500"/> Closed System Core V3.5.0
+                <ShieldCheck size={12} className="text-blue-500"/> Closed System Core V3.6.0
              </p>
           </div>
 
@@ -211,9 +209,11 @@ const App: React.FC = () => {
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>Access System <ArrowRight size={16}/></>}
             </button>
             
-            <p className="text-center text-[10px] text-gray-300 font-bold uppercase tracking-widest italic">
-              Akses terbatas. Hubungi Admin untuk aktivasi.
-            </p>
+            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+               <p className="text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                 Akses tertutup. Registrasi hanya dapat dilakukan melalui Administrator Socialflow.
+               </p>
+            </div>
           </form>
         </div>
       </div>
