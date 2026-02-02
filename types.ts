@@ -25,11 +25,14 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  whatsapp?: string; // Field baru
   role: UserRole;
   avatar?: string;
   permissions: Permissions;
   isSubscribed: boolean;
+  activationDate?: string; // Field baru
   subscriptionExpiry?: string;
+  status?: 'active' | 'suspended' | 'expired';
   jobdesk: string;
   kpi: string[];
   activityLogs: ActivityLog[];
@@ -68,7 +71,7 @@ export interface RegistrationRequest {
   reason?: string;
   timestamp: string;
   status: 'pending' | 'approved' | 'rejected';
-  nodeId: string; // ID Perangkat pendaftar
+  nodeId: string;
 }
 
 export interface Message {
