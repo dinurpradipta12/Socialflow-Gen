@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, Calendar, Megaphone, BarChart3, Link2, Users, Settings, LogOut, FileSpreadsheet, Database
+  LayoutDashboard, Calendar, Megaphone, BarChart3, Link2, Users, Settings, LogOut, FileSpreadsheet, Database, X, Clock as ClockIcon
 } from 'lucide-react';
 import { User } from '../types';
 
@@ -12,6 +12,7 @@ interface SidebarProps {
   onLogout: () => void;
   user: User;
   appLogo?: string | null;
+  isOpen?: boolean;
 }
 
 const navItems = [
@@ -25,7 +26,7 @@ const navItems = [
   { id: 'settings', label: 'Pengaturan', icon: Settings },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColorHex, onLogout, user, appLogo }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColorHex, onLogout, user, appLogo, isOpen = false }) => {
   const [time, setTime] = useState(new Date());
 
   useEffect(() => {
@@ -45,31 +46,31 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
   const isDev = user.role === 'developer';
 
   return (
-    <div className="w-72 h-screen bg-white border-r border-gray-100 flex flex-col fixed left-0 top-0 z-50 overflow-hidden shadow-2xl transition-all duration-300">
+    <div className={`fixed inset-y-0 left-0 w-72 bg-white border-r border-gray-100 flex flex-col z-[100] transition-transform duration-300 ease-in-out transform ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} shadow-2xl md:shadow-none`}>
       <div className="p-6 flex flex-col h-full">
         {/* Logo Section */}
-        <div className="flex items-center gap-3 mb-6 min-h-[48px]">
-          {appLogo ? (
-            <img src={appLogo} alt="Workspace Logo" className="w-full h-12 object-contain" />
-          ) : (
-            <>
-              <div className="w-10 h-10 rounded-xl bg-[var(--primary-color)] flex items-center justify-center text-white font-bold text-xl shadow-lg">
-                SF
-              </div>
-              <div className="animate-slide">
-                <h1 className="font-black text-gray-900 text-sm leading-tight tracking-tight">Socialflow</h1>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-0.5">by Snaillabs.id</p>
-              </div>
-            </>
-          )}
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            {appLogo ? (
+              <img src={appLogo} alt="Logo" className="h-10 object-contain" />
+            ) : (
+              <>
+                <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-black text-xl shadow-lg">SF</div>
+                <div>
+                  <h1 className="font-black text-gray-900 text-sm leading-tight tracking-tight">Socialflow</h1>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-0.5">by Snaillabs.id</p>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Greeting Widget */}
-        <div className="mb-6 p-5 bg-gray-50/80 rounded-3xl border border-gray-100 shadow-sm space-y-1">
-           <p className="text-xs font-black text-gray-900">Hey {user.name ? user.name.split(' ')[0] : 'User'},</p>
-           <p className="text-[11px] font-bold text-gray-500 leading-tight">{getGreeting()}!</p>
-           <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-gray-100">
-              <div className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)] animate-pulse"></div>
+        {/* Greeting Widget (Simplified on mobile) */}
+        <div className="mb-6 p-5 bg-gray-50/80 rounded-3xl border border-gray-100 shadow-sm">
+           <p className="text-xs font-black text-gray-900">Halo {user.name.split(' ')[0]},</p>
+           <p className="text-[11px] font-bold text-gray-500">{getGreeting()}!</p>
+           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
+              <ClockIcon size={12} className="text-blue-500" />
               <span className="text-[10px] font-black text-gray-900 uppercase tracking-tighter">
                 {time.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
               </span>
@@ -77,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
         </div>
 
         {/* Navigation */}
-        <nav className="space-y-1 flex-1 overflow-y-auto custom-scrollbar">
+        <nav className="space-y-1 flex-1 overflow-y-auto custom-scrollbar pr-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -87,17 +88,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
               <button
                 key={item.id}
                 onClick={() => hasPermission && setActiveTab(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-300 group ${
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group ${
                   isActive 
-                    ? `bg-blue-50 text-[var(--primary-color)] font-bold shadow-sm` 
+                    ? `bg-blue-50 text-blue-600 font-bold shadow-sm` 
                     : hasPermission 
                       ? 'text-gray-400 hover:bg-gray-50 hover:text-gray-900' 
                       : 'text-gray-200 cursor-not-allowed opacity-50'
                 }`}
               >
-                <Icon size={18} className={isActive ? 'text-[var(--primary-color)]' : 'group-hover:text-gray-900 transition-colors'} />
+                <Icon size={18} className={isActive ? 'text-blue-600' : 'group-hover:text-gray-900 transition-colors'} />
                 <span className="text-[11px] font-black uppercase tracking-widest">{item.label}</span>
-                {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)] ml-auto" />}
+                {isActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-500 ml-auto" />}
               </button>
             );
           })}
@@ -105,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
           {isDev && (
             <button
               onClick={() => setActiveTab('devPortal')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all mt-4 border border-blue-100 ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all mt-6 border border-blue-100 ${
                 activeTab === 'devPortal' ? 'bg-gray-900 text-white shadow-xl' : 'text-blue-600 bg-blue-50/30 hover:bg-blue-50'
               }`}
             >
@@ -115,21 +116,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, primaryColor
           )}
         </nav>
 
-        {/* Footer Profile */}
-        <div className="mt-auto pt-6 space-y-3">
-          <button 
-            onClick={() => setActiveTab('profile')}
-            className={`w-full flex items-center gap-3 p-3 bg-gray-50 hover:bg-white border border-transparent rounded-2xl text-left transition-all ${activeTab === 'profile' ? 'shadow-lg border-gray-100' : ''}`}
-          >
+        {/* Profile Info */}
+        <div className="mt-auto pt-6 border-t border-gray-50">
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl mb-3">
             <img src={user.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-sm" alt="" />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-black text-gray-900 truncate">{user.name}</p>
-              <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black truncate">{user.role}</p>
+              <p className="text-[9px] text-gray-400 uppercase tracking-widest font-black truncate">{user.role}</p>
             </div>
-          </button>
-          <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3.5 text-gray-400 hover:text-rose-600 transition-all rounded-2xl hover:bg-rose-50 group">
+          </div>
+          <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 text-gray-400 hover:text-rose-600 transition-all rounded-2xl hover:bg-rose-50">
             <LogOut size={18} />
-            <span className="text-[10px] font-black uppercase tracking-widest">Keluar</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">Keluar Aplikasi</span>
           </button>
         </div>
       </div>
