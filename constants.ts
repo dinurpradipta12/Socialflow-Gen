@@ -1,7 +1,7 @@
 
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
-export const APP_VERSION = '2.9.7'; // Versi stabil untuk penulisan database
+export const APP_VERSION = '2.9.8'; // Versi terbaru dengan Real-time Sheet Sync
 
 export const THEME_COLORS = {
   blue: { bg: 'bg-blue-100', text: 'text-blue-500', border: 'border-blue-200', light: 'bg-blue-50', hover: 'hover:bg-blue-200' },

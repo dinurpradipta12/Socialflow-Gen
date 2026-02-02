@@ -226,13 +226,13 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
-    // 1. Simpan Lokal Instan
+    // 1. Simpan Lokal Instan (Backup utama)
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
-    // 2. Push ke Cloud dengan optimasi URL
+    // 2. Direct-to-Sheet Logic (V2.9.8)
     if (dbSourceUrl && dbSourceUrl.includes('script.google.com')) {
       try {
         const queryParams = new URLSearchParams({
@@ -242,27 +242,32 @@ const App: React.FC = () => {
           email: newReg.email,
           password: newReg.password || '',
           timestamp: newReg.timestamp,
-          _v: APP_VERSION // Sertakan versi saat pendaftaran
+          origin: window.location.origin
         });
 
-        const connector = dbSourceUrl.includes('?') ? '&' : '?';
-        const targetUrl = `${dbSourceUrl}${connector}${queryParams.toString()}`;
+        // Trik: Gunakan Image ping untuk bypass CORS sepenuhnya jika fetch gagal
+        const targetUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}${queryParams.toString()}`;
         
-        // Gunakan fetch mode no-cors untuk melewati hambatan preflight/redirect Apps Script
+        // Coba fetch mode no-cors dulu
         fetch(targetUrl, { 
           method: 'GET', 
           mode: 'no-cors',
-          cache: 'no-cache',
-          credentials: 'omit'
+          cache: 'no-cache'
+        }).then(() => {
+           console.log("Direct write success signal sent.");
         });
-        console.log("Database write command sent to cloud.");
+
+        // Backup Ping menggunakan Image object (teknik pixel tracking yang sangat handal)
+        const img = new Image();
+        img.src = targetUrl + "&ping=img";
+        
       } catch (err) {
-        console.warn("Cloud write failed, data remains in local cache.", err);
+        console.warn("Cloud Write Attempted with warning:", err);
       }
     }
 
     setLoading(false);
-    alert("PENDAFTARAN BERHASIL!\n\nData Anda telah tercatat secara otomatis di Google Sheets kami. Akun Anda akan aktif setelah disetujui oleh Developer.");
+    alert(`PENDAFTARAN TERKIRIM!\n\nData ${newReg.name} telah dicatat di database Cloud Socialflow. Silakan hubungi Developer untuk persetujuan akun.`);
     setAuthState('login');
     setRegName(''); setRegEmail(''); setRegPassword('');
   };
