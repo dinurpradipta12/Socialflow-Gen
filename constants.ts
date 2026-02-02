@@ -70,7 +70,9 @@ export const MOCK_REGISTRATIONS: RegistrationRequest[] = [
     timestamp: '2023-10-24 10:00', 
     status: 'pending',
     handle: '@andipratama',
-    niche: 'Tech & Lifestyle'
+    niche: 'Tech & Lifestyle',
+    // Added missing required property nodeId
+    nodeId: 'sf-node-mock-001'
   },
 ];
 

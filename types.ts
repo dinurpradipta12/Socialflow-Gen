@@ -40,6 +40,14 @@ export interface User {
   workspaceId?: string;
 }
 
+export interface CloudConfig {
+  apiKey: string;
+  endpoint: string;
+  syncToken: string;
+  lastSync: string;
+  status: 'online' | 'offline' | 'syncing';
+}
+
 export interface UserSettings {
   primaryColor: string;
   accentColor: string;
@@ -47,6 +55,7 @@ export interface UserSettings {
   darkMode: boolean;
   appLogo?: string;
   dbSourceUrl?: string;
+  cloud?: CloudConfig;
 }
 
 export interface RegistrationRequest {
@@ -59,6 +68,7 @@ export interface RegistrationRequest {
   reason?: string;
   timestamp: string;
   status: 'pending' | 'approved' | 'rejected';
+  nodeId: string; // ID Perangkat pendaftar
 }
 
 export interface Message {
@@ -117,9 +127,6 @@ export interface ContentItem {
   description: string;
 }
 
-/**
- * Added missing SystemNotification interface to fix compilation error in Team.tsx
- */
 export interface SystemNotification {
   id: string;
   senderName: string;
