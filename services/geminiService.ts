@@ -2,14 +2,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PostInsight } from "../types";
 
-/**
- * Fungsi pembantu untuk inisialisasi AI secara dinamis.
- * Ini mencegah error jika process.env.API_KEY belum tersedia saat modul pertama kali di-load.
- */
 function getAIClient() {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API_KEY tidak ditemukan di environment. Pastikan sudah diset di Cloudflare Dashboard.");
+    throw new Error("API_KEY tidak ditemukan.");
   }
   return new GoogleGenAI({ apiKey });
 }
@@ -18,10 +14,7 @@ export async function scrapePostInsights(url: string): Promise<PostInsight> {
   const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Analisis URL media sosial berikut dan simulasikan pengambilan data wawasannya secara mendalam. 
-    PENTING: Berikan analisis dalam bahasa Indonesia yang sangat profesional dan teknis.
-    URL: ${url}. 
-    Berikan data performa (likes, comments, shares) yang realistis berdasarkan jenis platform dari URL tersebut.`,
+    contents: `Analisis URL media sosial berikut secara mendalam: ${url}. Berikan data performa dalam JSON Indonesia profesional.`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -34,28 +27,43 @@ export async function scrapePostInsights(url: string): Promise<PostInsight> {
           shares: { type: Type.NUMBER },
           engagementRate: { type: Type.NUMBER },
           sentiment: { type: Type.STRING, enum: ['positive', 'neutral', 'negative'] },
-          analysis: { type: Type.STRING, description: 'Satu paragraf singkat analisis tren performa dalam Bahasa Indonesia.' },
+          analysis: { type: Type.STRING },
         },
         required: ["url", "platform", "likes", "comments", "shares", "engagementRate", "sentiment", "analysis"]
       }
     }
   });
 
-  const text = response.text;
-  if (!text) throw new Error("Gagal mendapatkan respon dari AI.");
-  return JSON.parse(text);
+  return JSON.parse(response.text || '{}');
 }
 
-export async function generateKPIReport(data: any): Promise<string> {
+export async function scrapeMonthlyContent(username: string, platform: string, month: string): Promise<PostInsight[]> {
   const ai = getAIClient();
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Berdasarkan kumpulan data performa ini: ${JSON.stringify(data)}, buatkan laporan ringkasan eksekutif (Executive Summary) profesional untuk KPI media sosial dalam Bahasa Indonesia. 
-    Laporan harus berisi:
-    1. Ringkasan Performa Saat Ini.
-    2. Identifikasi Kekuatan dan Kelemahan konten.
-    3. 3 Rekomendasi strategis yang dapat langsung dieksekusi tim kreatif.`,
+    contents: `Simulasikan pengambilan 5-10 postingan terbaik untuk akun @${username} di ${platform} selama bulan ${month}. Berikan dalam format array JSON PostInsight.`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            url: { type: Type.STRING },
+            platform: { type: Type.STRING },
+            likes: { type: Type.NUMBER },
+            comments: { type: Type.NUMBER },
+            shares: { type: Type.NUMBER },
+            engagementRate: { type: Type.NUMBER },
+            sentiment: { type: Type.STRING, enum: ['positive', 'neutral', 'negative'] },
+            analysis: { type: Type.STRING },
+            postDate: { type: Type.STRING }
+          },
+          required: ["url", "platform", "likes", "comments", "shares", "engagementRate", "sentiment", "analysis", "postDate"]
+        }
+      }
+    }
   });
 
-  return response.text || "Gagal menghasilkan laporan.";
+  return JSON.parse(response.text || '[]');
 }

@@ -46,16 +46,7 @@ export interface UserSettings {
   fontSize: 'small' | 'medium' | 'large';
   darkMode: boolean;
   appLogo?: string;
-  dbSourceUrl?: string; // URL Google Sheets atau External DB
-}
-
-export interface SystemNotification {
-  id: string;
-  type: 'invite' | 'system' | 'mention';
-  title: string;
-  message: string;
-  timestamp: string;
-  read: boolean;
+  dbSourceUrl?: string;
 }
 
 export interface RegistrationRequest {
@@ -63,6 +54,9 @@ export interface RegistrationRequest {
   name: string;
   email: string;
   password?: string;
+  handle?: string;
+  niche?: string;
+  reason?: string;
   timestamp: string;
   status: 'pending' | 'approved' | 'rejected';
 }
@@ -99,7 +93,8 @@ export interface PostInsight {
   sentiment: 'positive' | 'neutral' | 'negative';
   analysis: string;
   timestamp?: string;
-  sourceType?: 'plan' | 'manual';
+  sourceType?: 'plan' | 'manual' | 'cloud_pull';
+  postDate?: string;
 }
 
 export type ThemeColor = 'blue' | 'purple' | 'emerald' | 'rose' | 'slate' | 'custom';
@@ -120,4 +115,16 @@ export interface ContentItem {
   status: string;
   scheduledDate: string;
   description: string;
+}
+
+/**
+ * Added missing SystemNotification interface to fix compilation error in Team.tsx
+ */
+export interface SystemNotification {
+  id: string;
+  senderName: string;
+  messageText: string;
+  timestamp: string;
+  read: boolean;
+  type?: 'info' | 'warning' | 'success';
 }

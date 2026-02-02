@@ -1,14 +1,14 @@
 
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
-export const APP_VERSION = '3.0.7'; // Versi stabil terbaru dari deployment main branch
+export const APP_VERSION = '3.0.8'; 
 
 export const THEME_COLORS = {
   blue: { bg: 'bg-blue-100', text: 'text-blue-500', border: 'border-blue-200', light: 'bg-blue-50', hover: 'hover:bg-blue-200' },
   purple: { bg: 'bg-purple-100', text: 'text-purple-500', border: 'border-purple-200', light: 'bg-purple-50', hover: 'hover:bg-purple-200' },
   emerald: { bg: 'bg-emerald-100', text: 'text-emerald-500', border: 'border-emerald-200', light: 'bg-emerald-50', hover: 'hover:bg-emerald-200' },
   rose: { bg: 'bg-rose-100', text: 'text-rose-500', border: 'border-rose-200', light: 'bg-rose-50', hover: 'hover:bg-rose-200' },
-  slate: { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', light: 'bg-slate-50', hover: 'hover:bg-slate-200' },
+  slate: { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', light: 'bg-slate-50', hover: 'hover:bg-emerald-200' },
 };
 
 const FULL_PERMISSIONS: Permissions = {
@@ -62,29 +62,16 @@ export const MOCK_USERS: User[] = [
   }
 ];
 
-export const MOCK_MESSAGES: Message[] = [
-  { id: 'm1', senderId: '1', text: 'Halo tim, bagaimana progress konten hari ini?', timestamp: '2023-10-25T09:00:00Z' },
-  { id: 'm2', senderId: 'dev-1', text: 'Sudah beres admin, tinggal di review saja.', timestamp: '2023-10-25T09:15:00Z' }
-];
-
 export const MOCK_REGISTRATIONS: RegistrationRequest[] = [
-  { id: 'r1', name: 'Andi Pratama', email: 'andi@gmail.com', timestamp: '2023-10-24 10:00', status: 'pending' },
-  { id: 'r2', name: 'Siti Aminah', email: 'siti@snaillabs.id', timestamp: '2023-10-25 08:30', status: 'pending' },
-];
-
-export const MOCK_CONTENT_PLANS: ContentPlanItem[] = [
-  {
-    id: 'cp1',
-    status: 'Dijadwalkan',
-    value: 'Educational',
-    pillar: 'Tech Tips',
-    type: 'Carousel',
-    title: 'Top 5 Tools for Social Media',
-    scriptUrl: '#',
-    visualUrl: 'https://picsum.photos/seed/content1/400/600',
-    postLink: 'https://instagram.com/p/123',
-    description: 'Detailed carousel showing apps like Socialflow.'
-  }
+  { 
+    id: 'r1', 
+    name: 'Andi Pratama', 
+    email: 'andi@gmail.com', 
+    timestamp: '2023-10-24 10:00', 
+    status: 'pending',
+    handle: '@andipratama',
+    niche: 'Tech & Lifestyle'
+  },
 ];
 
 export const MOCK_WORKSPACES: Workspace[] = [
@@ -98,6 +85,70 @@ export const MOCK_WORKSPACES: Workspace[] = [
   },
 ];
 
+/**
+ * Added missing MOCK_CONTENT to fix compilation error in Calendar.tsx
+ */
 export const MOCK_CONTENT: ContentItem[] = [
-  { id: '1', title: 'Product Launch Video', platform: 'instagram', status: 'scheduled', scheduledDate: '2023-10-25', description: 'Video promosi.' },
+  { 
+    id: 'c1', 
+    title: 'Brand Anniversary Post', 
+    platform: 'instagram', 
+    status: 'published', 
+    scheduledDate: '2023-10-25', 
+    description: 'Celebrating our milestones.' 
+  },
+  { 
+    id: 'c2', 
+    title: 'AI Tools Roundup', 
+    platform: 'youtube', 
+    status: 'scheduled', 
+    scheduledDate: '2023-10-28', 
+    description: 'Video about latest AI advancements.' 
+  }
+];
+
+/**
+ * Added missing MOCK_CONTENT_PLANS to fix compilation error in ContentPlan.tsx
+ */
+export const MOCK_CONTENT_PLANS: ContentPlanItem[] = [
+  { 
+    id: 'cp1', 
+    title: 'Snaillabs Q4 Strategy', 
+    status: 'Drafting', 
+    value: 'Educational', 
+    pillar: 'Marketing', 
+    type: 'Reels', 
+    description: 'Our core strategy for the last quarter.', 
+    postLink: 'https://instagram.com/snaillabs', 
+    approvedBy: 'Super Admin' 
+  },
+  { 
+    id: 'cp2', 
+    title: 'User Feedback Highlight', 
+    status: 'Diposting', 
+    value: 'Engagement', 
+    pillar: 'Community', 
+    type: 'Carousel', 
+    description: 'Sharing what our users say about us.', 
+    postLink: 'https://instagram.com/p/mock123', 
+    approvedBy: 'Super Admin' 
+  }
+];
+
+/**
+ * Added missing MOCK_MESSAGES to fix compilation error in Messages.tsx
+ */
+export const MOCK_MESSAGES: Message[] = [
+  { 
+    id: 'msg1', 
+    senderId: '1', 
+    text: 'Halo tim, bagaimana progress dashboard?', 
+    timestamp: new Date().toISOString() 
+  },
+  { 
+    id: 'msg2', 
+    senderId: 'dev-1', 
+    text: 'Sedang optimasi cloud sync engine v3.0.8.', 
+    timestamp: new Date().toISOString() 
+  }
 ];
