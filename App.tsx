@@ -103,22 +103,39 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchCloudData();
-    const handleSync = () => fetchCloudData();
+    
+    // Handle real-time registration sync from other tabs or API
+    const handleSync = (event: MessageEvent) => {
+      if (event.data?.type === 'registration_new' || event.data?.type === 'registration_update') {
+        // Update registrations from broadcast
+        setRegistrations(event.data.data);
+      } else {
+        // Fallback: fetch from cloud
+        fetchCloudData();
+      }
+    };
+    
     cloudSyncChannel.onmessage = handleSync;
     const interval = setInterval(fetchCloudData, 5000);
+    
     return () => {
       cloudSyncChannel.onmessage = null;
       clearInterval(interval);
     };
   }, [fetchCloudData]);
 
-  const handleRegistrationAction = async (regId: string, status: 'approved' | 'rejected') => {
-    // Legacy support for queue logic if needed, otherwise this is less used now
-    setLoading(true);
-    await cloudService.updateRegistrationStatus(regId, status);
-    // ...existing logic for approval if queue was used...
-    await fetchCloudData();
-    setLoading(false);
+  const handleRegistrationAction = (regId: string, status: 'approved' | 'rejected') => {
+    // Update registrations state
+    const updatedRegs = registrations.map(reg => 
+      reg.id === regId ? { ...reg, status } : reg
+    );
+    setRegistrations(updatedRegs);
+    
+    // Update localStorage
+    localStorage.setItem('sf_registrations_db', JSON.stringify(updatedRegs));
+    
+    // Broadcast to other tabs
+    cloudSyncChannel.postMessage({ type: 'registration_update', data: updatedRegs });
   };
 
   const handleRegister = (e: React.FormEvent) => {
@@ -176,12 +193,14 @@ const App: React.FC = () => {
       };
 
       // Simpan ke registrations
-      setRegistrations([...registrations, newRegistration]);
+      const updatedRegs = [...registrations, newRegistration];
+      setRegistrations(updatedRegs);
       
       // Simpan ke localStorage untuk persistence
-      const saved = localStorage.getItem('sf_registrations_db');
-      const existingRegs = saved ? JSON.parse(saved) : [];
-      localStorage.setItem('sf_registrations_db', JSON.stringify([...existingRegs, newRegistration]));
+      localStorage.setItem('sf_registrations_db', JSON.stringify(updatedRegs));
+      
+      // Broadcast ke semua tabs (real-time sync)
+      cloudSyncChannel.postMessage({ type: 'registration_new', data: updatedRegs });
 
       setRegisterSuccess(true);
       
@@ -358,22 +377,22 @@ const App: React.FC = () => {
 
   if (authState === 'login') {
     return (
-      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
-        <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-10 border border-gray-100 animate-slide">
-          <div className="text-center space-y-4">
-             <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">SF</div>
-             <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Socialflow</h1>
-             <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-3 sm:p-4 font-sans">
+        <div className="max-w-[480px] w-full bg-white rounded-[2rem] sm:rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-6 sm:p-10 md:p-14 space-y-8 sm:space-y-10 border border-gray-100 animate-slide">
+          <div className="text-center space-y-3 sm:space-y-4">
+             <div className="w-14 sm:w-16 h-14 sm:h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-xl sm:text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">SF</div>
+             <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter">Socialflow</h1>
+             <p className="text-[9px] sm:text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
                 <ShieldCheck size={12} className="text-blue-500"/> Closed System Core V3.7.0
              </p>
           </div>
 
           {/* Auth Tabs */}
-          <div className="flex bg-gray-50 p-1 rounded-2xl border border-gray-100">
+          <div className="flex bg-gray-50 p-1 rounded-2xl border border-gray-100 gap-1">
             <button
               type="button"
               onClick={() => { setAuthTab('login'); setLoginError(null); setRegisterError(null); }}
-              className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
                 authTab === 'login'
                   ? 'bg-white text-blue-500 shadow-md'
                   : 'text-gray-400 hover:text-gray-900'
@@ -384,7 +403,7 @@ const App: React.FC = () => {
             <button
               type="button"
               onClick={() => { setAuthTab('register'); setLoginError(null); setRegisterError(null); }}
-              className={`flex-1 py-3 px-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
                 authTab === 'register'
                   ? 'bg-white text-blue-500 shadow-md'
                   : 'text-gray-400 hover:text-gray-900'
@@ -395,100 +414,99 @@ const App: React.FC = () => {
           </div>
 
           {authTab === 'login' ? (
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form onSubmit={handleLogin} className="space-y-4 sm:space-y-6">
               {loginError && (
-                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 animate-slide">
-                   <AlertTriangle size={18} className="text-rose-500 shrink-0" />
-                   <p className="text-[11px] font-bold text-rose-600 leading-tight">{loginError}</p>
+                <div className="p-3 sm:p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start sm:items-center gap-3 animate-slide">
+                   <AlertTriangle size={18} className="text-rose-500 shrink-0 mt-0.5 sm:mt-0" />
+                   <p className="text-[10px] sm:text-[11px] font-bold text-rose-600 leading-tight">{loginError}</p>
                 </div>
               )}
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Email Address</label>
-                 <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={`w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Email") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} placeholder="user@snaillabs.id" />
-              </div>
-              
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Email Address</label>
+                 <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={`w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Email") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} placeholder="user@snaillabs.id" />
+              </div>              
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Security Code</label>
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Security Code</label>
                  <div className="relative">
                     <input 
                       type={showPassword ? "text" : "password"} 
                       required value={password} onChange={e => setPassword(e.target.value)} 
-                      className={`w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Code") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} 
+                      className={`w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Code") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} 
                       placeholder="••••••••" 
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 transition-colors">
-                       {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 transition-colors">
+                       {showPassword ? <EyeOff size={18} className="sm:w-5 sm:h-5" /> : <Eye size={18} className="sm:w-5 sm:h-5" />}
                     </button>
                  </div>
               </div>
 
-              <button type="submit" disabled={loading} className="w-full py-6 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3">
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <>Access System <ArrowRight size={16}/></>}
+              <button type="submit" disabled={loading} className="w-full py-4 sm:py-6 bg-blue-500 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-2xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 sm:gap-3">
+                {loading ? <Loader2 size={16} className="animate-spin sm:w-[18px] sm:h-[18px]" /> : <><span className="hidden sm:inline">Access System</span><span className="sm:hidden">Sign In</span> <ArrowRight size={14} className="sm:w-4 sm:h-4"/></>}
               </button>
             </form>
           ) : (
-            <form onSubmit={handleRegister} className="space-y-6">
+            <form onSubmit={handleRegister} className="space-y-4 sm:space-y-6 max-h-[70vh] overflow-y-auto pr-2">
               {registerSuccess && (
-                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 animate-slide">
-                   <CheckCircle size={18} className="text-emerald-500 shrink-0" />
-                   <p className="text-[11px] font-bold text-emerald-600 leading-tight">Registrasi berhasil! Silakan tunggu approval dari admin.</p>
+                <div className="p-3 sm:p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-start sm:items-center gap-3 animate-slide">
+                   <CheckCircle size={18} className="text-emerald-500 shrink-0 mt-0.5 sm:mt-0" />
+                   <p className="text-[10px] sm:text-[11px] font-bold text-emerald-600 leading-tight">Registrasi berhasil! Silakan tunggu approval dari admin.</p>
                 </div>
               )}
 
               {registerError && (
-                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 animate-slide">
-                   <AlertTriangle size={18} className="text-rose-500 shrink-0" />
-                   <p className="text-[11px] font-bold text-rose-600 leading-tight">{registerError}</p>
+                <div className="p-3 sm:p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start sm:items-center gap-3 animate-slide">
+                   <AlertTriangle size={18} className="text-rose-500 shrink-0 mt-0.5 sm:mt-0" />
+                   <p className="text-[10px] sm:text-[11px] font-bold text-rose-600 leading-tight">{registerError}</p>
                 </div>
               )}
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Full Name</label>
-                 <input type="text" required value={registerForm.name} onChange={e => setRegisterForm({...registerForm, name: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="John Doe" />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Full Name</label>
+                 <input type="text" required value={registerForm.name} onChange={e => setRegisterForm({...registerForm, name: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="John Doe" />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Email Address</label>
-                 <input type="email" required value={registerForm.email} onChange={e => setRegisterForm({...registerForm, email: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="user@snaillabs.id" />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Email Address</label>
+                 <input type="email" required value={registerForm.email} onChange={e => setRegisterForm({...registerForm, email: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="user@snaillabs.id" />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">WhatsApp (62xxx)</label>
-                 <input type="text" required value={registerForm.whatsapp} onChange={e => setRegisterForm({...registerForm, whatsapp: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="628123456789" />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">WhatsApp (62xxx)</label>
+                 <input type="text" required value={registerForm.whatsapp} onChange={e => setRegisterForm({...registerForm, whatsapp: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="628123456789" />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Security Code (Password)</label>
-                 <input type="password" required value={registerForm.password} onChange={e => setRegisterForm({...registerForm, password: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="Min 6 karakter" />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Security Code (Password)</label>
+                 <input type="password" required value={registerForm.password} onChange={e => setRegisterForm({...registerForm, password: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="Min 6 karakter" />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Confirm Password</label>
-                 <input type="password" required value={registerForm.confirmPassword} onChange={e => setRegisterForm({...registerForm, confirmPassword: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="Ulangi password" />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Confirm Password</label>
+                 <input type="password" required value={registerForm.confirmPassword} onChange={e => setRegisterForm({...registerForm, confirmPassword: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="Ulangi password" />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Social Media Handle (Optional)</label>
-                 <input type="text" value={registerForm.handle} onChange={e => setRegisterForm({...registerForm, handle: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="@username" />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Social Media Handle (Optional)</label>
+                 <input type="text" value={registerForm.handle} onChange={e => setRegisterForm({...registerForm, handle: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="@username" />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Niche/Industry (Optional)</label>
-                 <input type="text" value={registerForm.niche} onChange={e => setRegisterForm({...registerForm, niche: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="e.g., Marketing, Tech, Fashion" />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Niche/Industry (Optional)</label>
+                 <input type="text" value={registerForm.niche} onChange={e => setRegisterForm({...registerForm, niche: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="e.g., Marketing, Tech, Fashion" />
               </div>
 
               <div className="space-y-2">
-                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Why Socialflow? (Optional)</label>
-                 <textarea value={registerForm.reason} onChange={e => setRegisterForm({...registerForm, reason: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="Tell us why you're interested..." rows={3} />
+                 <label className="text-[8px] sm:text-[9px] font-black uppercase text-gray-400 ml-3 sm:ml-4 tracking-widest">Why Socialflow? (Optional)</label>
+                 <textarea value={registerForm.reason} onChange={e => setRegisterForm({...registerForm, reason: e.target.value})} className="w-full px-4 sm:px-7 py-3 sm:py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm focus:bg-white focus:ring-4 focus:ring-blue-50" placeholder="Tell us why you're interested..." rows={3} />
               </div>
 
-              <button type="submit" disabled={loading || registerSuccess} className="w-full py-6 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3">
-                {loading ? <Loader2 size={18} className="animate-spin" /> : <><UserPlus size={16}/> Register Now</>}
+              <button type="submit" disabled={loading || registerSuccess} className="w-full py-4 sm:py-6 bg-blue-500 text-white font-black uppercase text-[10px] sm:text-xs tracking-widest rounded-2xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 sm:gap-3">
+                {loading ? <Loader2 size={16} className="animate-spin sm:w-[18px] sm:h-[18px]" /> : <><UserPlus size={14} className="sm:w-4 sm:h-4"/> <span className="hidden sm:inline">Register Now</span><span className="sm:hidden">Register</span></>}
               </button>
 
-              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                 <p className="text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+              <div className="p-3 sm:p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                 <p className="text-center text-[8px] sm:text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
                    Daftarkan akun Anda. Admin akan melakukan review dan approval dalam 24 jam.
                  </p>
               </div>
