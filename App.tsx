@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeColor, Workspace, User, Message, PostInsight, RegistrationRequest } from './types';
 import { MOCK_WORKSPACES, MOCK_USERS, DEV_CREDENTIALS, MOCK_REGISTRATIONS, APP_VERSION } from './constants';
 import Sidebar from './components/Sidebar';
@@ -28,7 +28,6 @@ const App: React.FC = () => {
   const [authState, setAuthState] = useState<'login' | 'register' | 'authenticated'>(user ? 'authenticated' : 'login');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [showPassword, setShowPassword] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const [email, setEmail] = useState('');
@@ -56,59 +55,50 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : MOCK_WORKSPACES[0];
   });
 
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
-
   const isDev = user?.role === 'developer';
 
-  // Sinkronisasi Reaktif: Memastikan data pendaftaran selalu terbaru dari localStorage
+  // CLOUD SYNC WATCHER: Memastikan data pendaftaran sinkron antar tab/window
   useEffect(() => {
-    const syncFromStorage = () => {
+    const syncCloudData = () => {
       const savedRegs = localStorage.getItem('sf_registrations_db');
-      if (savedRegs) setRegistrations(JSON.parse(savedRegs));
-      
-      const savedAnalytics = localStorage.getItem('sf_analytics_db');
-      if (savedAnalytics) setAnalyticsData(JSON.parse(savedAnalytics));
+      if (savedRegs) {
+        const parsed = JSON.parse(savedRegs);
+        // Hanya update jika panjang data berbeda (menghindari loop)
+        setRegistrations(prev => prev.length !== parsed.length ? parsed : prev);
+      }
     };
 
-    // Listen to changes from other windows/tabs
-    window.addEventListener('storage', syncFromStorage);
+    // Sinkronisasi instan jika ada perubahan storage (antar tab)
+    window.addEventListener('storage', syncCloudData);
     
-    // Listen to Cloud Sync Channel
-    const handleSync = (event: MessageEvent) => {
+    // Broadcast Channel untuk sinkronisasi pesan & status real-time
+    const handleSyncMessage = (event: MessageEvent) => {
       const { type, payload } = event.data;
       if (type === 'REGISTRATION_UPDATE') setRegistrations(payload);
       if (type === 'ANALYTICS_UPDATE') setAnalyticsData(payload);
     };
-    cloudSyncChannel.addEventListener('message', handleSync);
+    cloudSyncChannel.addEventListener('message', handleSyncMessage);
 
     return () => {
-      window.removeEventListener('storage', syncFromStorage);
-      cloudSyncChannel.removeEventListener('message', handleSync);
+      window.removeEventListener('storage', syncCloudData);
+      cloudSyncChannel.removeEventListener('message', handleSyncMessage);
     };
   }, []);
 
-  const handleUpdateApp = () => {
-    setLoading(true);
-    localStorage.setItem('sf_update_target', '3.1.0');
-    setTimeout(() => window.location.reload(), 1500);
-  };
-
   const handleRegistrationAction = (regId: string, status: 'approved' | 'rejected') => {
-    const currentRegs = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
-    const updated = currentRegs.map((r: any) => r.id === regId ? { ...r, status } : r);
+    const updated = registrations.map(r => r.id === regId ? { ...r, status } : r);
     setRegistrations(updated);
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     cloudSyncChannel.postMessage({ type: 'REGISTRATION_UPDATE', payload: updated });
 
     if (status === 'approved') {
-      const reg = updated.find((r: any) => r.id === regId);
+      const reg = updated.find(r => r.id === regId);
       if (reg) {
         const newUser: User = {
           id: `U-${Date.now()}`, name: reg.name, email: reg.email, role: 'viewer',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
           permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: false },
-          isSubscribed: true, subscriptionExpiry: '2025-12-31', jobdesk: 'New Member', kpi: [], activityLogs: [], performanceScore: 0
+          isSubscribed: true, subscriptionExpiry: '2025-12-31', jobdesk: 'Member Cloud', kpi: [], activityLogs: [], performanceScore: 0
         };
         const updatedUsers = [...allUsers, newUser];
         setAllUsers(updatedUsers);
@@ -121,31 +111,23 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      let loggedInUser: User | undefined;
-      if (email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password) {
-        loggedInUser = allUsers.find(u => u.role === 'developer');
-      } else {
-        loggedInUser = allUsers.find(u => u.email === email);
-      }
-      
+      const loggedInUser = allUsers.find(u => u.email === email && (email === DEV_CREDENTIALS.email ? password === DEV_CREDENTIALS.password : true));
       if (loggedInUser) {
         setUser(loggedInUser);
         localStorage.setItem('sf_session_user', JSON.stringify(loggedInUser));
         setAuthState('authenticated');
       } else {
-        alert('Email atau Password salah.');
+        alert('Akun tidak ditemukan atau password salah.');
       }
       setLoading(false);
-    }, 600);
+    }, 800);
   };
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     
-    // Ambil data terbaru dari storage dulu agar tidak menimpa data device lain
-    const currentRegs = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
-    
+    // Cloud Register Protocol
     const newReg: RegistrationRequest = {
       id: `REG-${Date.now()}`,
       ...regData,
@@ -153,23 +135,20 @@ const App: React.FC = () => {
       status: 'pending'
     };
     
-    const updated = [newReg, ...currentRegs];
-    setRegistrations(updated);
-    localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
-    
-    // Broadcast agar tab dev portal yang terbuka langsung update
-    cloudSyncChannel.postMessage({ type: 'REGISTRATION_UPDATE', payload: updated });
+    const updatedRegs = [newReg, ...registrations];
+    setRegistrations(updatedRegs);
+    localStorage.setItem('sf_registrations_db', JSON.stringify(updatedRegs));
+    cloudSyncChannel.postMessage({ type: 'REGISTRATION_UPDATE', payload: updatedRegs });
 
     setTimeout(() => {
       setLoading(false);
-      alert(`Pendaftaran Berhasil! Admin akan memverifikasi akun Anda.`);
+      alert(`Pendaftaran Berhasil Terkirim ke Cloud! Tunggu verifikasi admin.`);
       setAuthState('login');
-    }, 1000);
+    }, 1200);
   };
 
   const saveAnalytics = (insight: PostInsight | PostInsight[]) => {
-    const current = JSON.parse(localStorage.getItem('sf_analytics_db') || '[]');
-    const updated = Array.isArray(insight) ? [...insight, ...current] : [insight, ...current];
+    const updated = Array.isArray(insight) ? [...insight, ...analyticsData] : [insight, ...analyticsData];
     setAnalyticsData(updated);
     localStorage.setItem('sf_analytics_db', JSON.stringify(updated));
     cloudSyncChannel.postMessage({ type: 'ANALYTICS_UPDATE', payload: updated });
@@ -187,41 +166,33 @@ const App: React.FC = () => {
       case 'team': return <Team primaryColor={activeWorkspace.color} currentUser={user} workspace={activeWorkspace} onUpdateWorkspace={(name, color) => setActiveWorkspace({ ...activeWorkspace, name, color })} addSystemNotification={() => {}} allUsers={allUsers} setUsers={setAllUsers} setWorkspace={setActiveWorkspace} />;
       case 'settings': return <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex="#DDD6FE" setAccentColorHex={()=>{}} fontSize="medium" setFontSize={()=>{}} customLogo={null} setCustomLogo={()=>{}} />;
       case 'profile': return <Profile user={user} primaryColor={activeWorkspace.color} setUser={setUser} />;
-      case 'devPortal': return isDev ? <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} setRegistrations={setRegistrations} dbSourceUrl="Socialflow Cloud Active" setDbSourceUrl={()=>{}} onManualSync={()=>{}} /> : null;
+      case 'devPortal': return isDev ? <DevPortal primaryColorHex={primaryColorHex} registrations={registrations} onRegistrationAction={handleRegistrationAction} users={allUsers} setUsers={setAllUsers} setRegistrations={setRegistrations} dbSourceUrl="Socialflow Global Registry" setDbSourceUrl={()=>{}} onManualSync={()=>{}} /> : null;
       default: return <Dashboard primaryColor={activeWorkspace.color} />;
     }
   };
 
   if (authState === 'login' || authState === 'register') {
     return (
-      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
-        <div className="max-w-[480px] w-full bg-white rounded-[2.5rem] md:rounded-[3.5rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] p-8 md:p-12 space-y-8 md:space-y-10 border border-gray-100 animate-slide">
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 md:p-6 font-sans">
+        <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] p-8 md:p-12 space-y-8 md:space-y-10 border border-gray-100 animate-slide">
           <div className="text-center space-y-4">
-             <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl md:rounded-3xl mx-auto flex items-center justify-center text-white text-xl md:text-2xl font-black shadow-xl ${authState === 'login' ? 'bg-blue-500 shadow-blue-200' : 'bg-emerald-500 shadow-emerald-200'}`}>SF</div>
-             <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tighter">{authState === 'login' ? 'Socialflow Login' : 'Buat Akun Baru'}</h1>
-             <p className="text-[9px] md:text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-                <ShieldCheck size={12} className="text-blue-400"/> Snaillabs Cloud Encryption
+             <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">SF</div>
+             <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tighter">
+                {authState === 'login' ? 'Cloud Login' : 'Pendaftaran Node'}
+             </h1>
+             <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
+                <ShieldCheck size={12} className="text-emerald-500"/> Secure Cloud Connection V3.1.0
              </p>
           </div>
 
           {authState === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-[9px] md:text-[10px] font-black text-gray-300 uppercase tracking-widest ml-4">Account Email</label>
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-6 py-4 md:px-7 md:py-5 bg-gray-50 border border-gray-100 rounded-2xl md:rounded-[2rem] outline-none font-bold text-gray-700 focus:ring-4 focus:ring-blue-50 transition-all text-sm" placeholder="name@example.com" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] md:text-[10px] font-black text-gray-300 uppercase tracking-widest ml-4">Password</label>
-                <div className="relative">
-                  <input type={showPassword ? "text" : "password"} required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-6 py-4 md:px-7 md:py-5 bg-gray-50 border border-gray-100 rounded-2xl md:rounded-[2rem] outline-none font-bold text-gray-700 focus:ring-4 focus:ring-blue-50 transition-all text-sm" placeholder="••••••••" />
-                </div>
-              </div>
-              <button type="submit" disabled={loading} className="w-full py-5 md:py-6 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl md:rounded-[2rem] shadow-2xl shadow-blue-500/30 hover:bg-blue-600 transition-all active:scale-95">
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:ring-4 focus:ring-blue-50 transition-all" placeholder="Email Terdaftar" />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:ring-4 focus:ring-blue-50 transition-all" placeholder="Password" />
+              <button type="submit" disabled={loading} className="w-full py-6 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-blue-500/30 active:scale-95 transition-all">
                 {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Masuk Dashboard"}
               </button>
-              <div className="text-center">
-                 <button type="button" onClick={() => setAuthState('register')} className="text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-500 transition-colors">Daftar Akun Baru</button>
-              </div>
+              <button type="button" onClick={() => setAuthState('register')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-500">Daftar Akun Baru</button>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">
@@ -233,12 +204,11 @@ const App: React.FC = () => {
                   <input type="password" required value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="Password" />
                   <input type="text" required value={regData.handle} onChange={e => setRegData({...regData, handle: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="@socialhandle" />
                </div>
-               <input type="text" required value={regData.niche} onChange={e => setRegData({...regData, niche: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="Bidang Konten (Tech, Fashion, dll)" />
-               <textarea required value={regData.reason} onChange={e => setRegData({...regData, reason: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="Alasan menggunakan Socialflow..." rows={2} />
-               <button type="submit" disabled={loading} className="w-full py-5 md:py-6 bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl md:rounded-[2rem] shadow-2xl shadow-emerald-500/30 hover:bg-emerald-600 transition-all active:scale-95">
-                {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Kirim Pendaftaran Cloud"}
+               <textarea required value={regData.reason} onChange={e => setRegData({...regData, reason: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="Alasan menggunakan tool..." rows={2} />
+               <button type="submit" disabled={loading} className="w-full py-6 bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-emerald-500/30 active:scale-95 transition-all">
+                {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Kirim ke Cloud Hub"}
               </button>
-              <button type="button" onClick={() => setAuthState('login')} className="w-full text-[9px] font-black text-gray-400 uppercase tracking-widest hover:text-emerald-500">Kembali ke Login</button>
+              <button type="button" onClick={() => setAuthState('login')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-emerald-500">Sudah punya akun? Login</button>
             </form>
           )}
         </div>
@@ -247,10 +217,10 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex font-sans relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#F8FAFC] flex font-sans overflow-x-hidden relative">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[90] md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[90] md:hidden" onClick={() => setIsSidebarOpen(false)}></div>
       )}
 
       <Sidebar 
@@ -262,40 +232,33 @@ const App: React.FC = () => {
         isOpen={isSidebarOpen}
       />
       
-      <main className={`flex-1 transition-all duration-300 min-h-screen ${isSidebarOpen ? 'blur-sm md:blur-none' : ''} md:ml-72 p-6 md:p-12 relative`}>
-        {/* Mobile Header */}
+      <main className={`flex-1 transition-all duration-300 min-h-screen md:ml-72 p-6 md:p-12 relative ${isSidebarOpen ? 'blur-sm md:blur-none' : ''}`}>
+        {/* Responsive Navbar */}
         <div className="flex items-center justify-between mb-8 md:hidden">
-           <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm text-gray-900">
-              <Menu size={24} />
-           </button>
-           <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center text-white font-black">SF</div>
-              <h2 className="text-xs font-black text-gray-900 tracking-tight">Socialflow</h2>
-           </div>
-           <button className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm text-gray-400">
-              <Bell size={20} />
-           </button>
+           <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm"><Menu size={24} /></button>
+           <h2 className="text-sm font-black text-gray-900 tracking-tighter">SOCIALFLOW CLOUD</h2>
+           <button className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm text-gray-400"><Bell size={20} /></button>
         </div>
 
-        {/* Cloud Status (Hidden on small mobile) */}
-        <div className="hidden sm:flex absolute top-10 right-12 items-center gap-4 z-50">
+        {/* Global Cloud Status */}
+        <div className="hidden md:flex absolute top-10 right-12 items-center gap-4 z-50 animate-slide">
            <div className="bg-white px-5 py-3 rounded-2xl border border-gray-100 shadow-xl flex items-center gap-3">
               <div className="flex flex-col items-end">
-                 <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Cloud Engine V{APP_VERSION}</p>
-                 <p className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-1.5"><Globe size={10}/> Instant Cloud Sync</p>
+                 <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Active System V3.1.0</p>
+                 <p className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-1.5"><Globe size={10}/> Global Sync Enabled</p>
               </div>
               <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center"><Cloud size={16}/></div>
            </div>
         </div>
 
         <header className="mb-10 md:mb-12">
-           <h2 className="text-[9px] md:text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] mb-2">{activeWorkspace?.name} Workspace</h2>
+           <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.4em] mb-2">{activeWorkspace?.name}</h2>
            <h1 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tighter capitalize">{activeTab.replace(/([A-Z])/g, ' $1')}</h1>
         </header>
 
-        <div className="max-w-6xl mx-auto">{renderContent()}</div>
+        <div className="max-w-6xl mx-auto w-full">{renderContent()}</div>
       </main>
-
+      
       <ChatPopup primaryColor={activeWorkspace?.color || 'blue'} currentUser={user!} messages={[]} onSendMessage={()=>{}} isOpen={false} setIsOpen={()=>{}} unreadCount={0} />
     </div>
   );
