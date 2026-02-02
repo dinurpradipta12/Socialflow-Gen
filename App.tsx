@@ -68,20 +68,14 @@ const App: React.FC = () => {
   const isDev = user?.role === 'developer';
 
   const syncWithCloud = useCallback(async (isManual = false) => {
-    if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) {
-      if (isManual) alert("URL Cloud belum diatur di Dev Portal.");
-      return;
-    }
-    
-    // Jangan sync jika sedang berjalan, kecuali manual
+    if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) return;
     if (!isManual && isSyncing) return;
 
     setIsSyncing(true);
     setSyncError(null);
 
-    // Smart Timeout Logic: Jika 5 detik tidak ada respon, anggap gagal/lambat
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     try {
       const res = await fetch(`${dbSourceUrl}?action=getRegistrations&_t=${Date.now()}`, {
@@ -99,7 +93,7 @@ const App: React.FC = () => {
       if (Array.isArray(cloudData)) {
         setRegistrations(cloudData);
         localStorage.setItem('sf_registrations_db', JSON.stringify(cloudData));
-        const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         setLastSyncTime(now);
         localStorage.setItem('sf_last_sync', now);
         
@@ -110,32 +104,30 @@ const App: React.FC = () => {
         prevRegCount.current = cloudData.length;
       }
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        setSyncError("Connection Timeout (Slow Cloud)");
-      } else {
-        setSyncError(err.message || "Failed to fetch");
-      }
-      console.warn("Sync slowed down, using local data.");
+      setSyncError(err.name === 'AbortError' ? "Cloud Slow" : (err.message || "Sync Error"));
     } finally {
       setIsSyncing(false);
     }
   }, [dbSourceUrl, isDev, isSyncing]);
 
+  // Efek untuk Polling Berfrekuensi Tinggi di Dev Portal
   useEffect(() => {
     if (dbSourceUrl) {
-      // Sync awal tetap dilakukan tapi tidak memblokir render
       syncWithCloud();
-      // Interval lebih lama (3 menit) agar tidak membebani koneksi
-      const interval = setInterval(() => syncWithCloud(), 180000);
+      // Jika di tab devPortal, sync setiap 10 detik. Jika tidak, setiap 3 menit.
+      const intervalTime = activeTab === 'devPortal' ? 10000 : 180000;
+      const interval = setInterval(() => syncWithCloud(), intervalTime);
       return () => clearInterval(interval);
     }
-  }, [dbSourceUrl, syncWithCloud]);
+  }, [dbSourceUrl, syncWithCloud, activeTab]);
 
   const handleRegistrationAction = useCallback(async (regId: string, status: 'approved' | 'rejected') => {
+    // 1. Update UI Lokal secara Instan
     const updated = registrations.map(r => r.id === regId ? { ...r, status } : r);
     setRegistrations(updated);
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
 
+    // 2. Kirim ke Cloud segera
     if (dbSourceUrl) {
       try {
         const params = new URLSearchParams();
@@ -143,13 +135,16 @@ const App: React.FC = () => {
         params.append('id', regId);
         params.append('status', status);
 
-        fetch(`${dbSourceUrl}?${params.toString()}`, { 
-          method: 'GET', 
-          mode: 'no-cors' 
-        });
-      } catch (e) { console.error("Background Update Error", e); }
+        // Gunakan fetch tanpa menunggu (Fire and forget) untuk kecepatan UI
+        fetch(`${dbSourceUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' })
+          .then(() => {
+            // Setelah kirim, tarik data terbaru untuk memastikan sinkronisasi
+            setTimeout(() => syncWithCloud(true), 2000);
+          });
+      } catch (e) { console.error("Cloud Update Error", e); }
     }
     
+    // 3. Jika disetujui, tambahkan ke User List lokal
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
       if (reg) {
@@ -170,7 +165,7 @@ const App: React.FC = () => {
       }
     }
     setDevNotif(null);
-  }, [registrations, dbSourceUrl, allUsers]);
+  }, [registrations, dbSourceUrl, allUsers, syncWithCloud]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,7 +192,7 @@ const App: React.FC = () => {
         alert('Akses Ditolak: Kredensial salah atau akun belum diverifikasi.');
       }
       setLoading(false);
-    }, 1000);
+    }, 800);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -213,6 +208,13 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
+    // 1. Simpan Lokal Instan
+    const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
+    const updated = [newReg, ...current];
+    localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
+    setRegistrations(updated);
+
+    // 2. Push ke Cloud
     if (dbSourceUrl && dbSourceUrl.includes('/exec')) {
       const params = new URLSearchParams();
       params.append('action', 'register');
@@ -222,21 +224,11 @@ const App: React.FC = () => {
       params.append('password', newReg.password || '');
       params.append('timestamp', newReg.timestamp);
 
-      // Kirim ke cloud tanpa menunggu respon lama
-      fetch(`${dbSourceUrl}?${params.toString()}`, {
-        method: 'GET',
-        mode: 'no-cors'
-      });
+      fetch(`${dbSourceUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' });
     }
 
-    // Selalu simpan di lokal agar UI instan
-    const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
-    const updated = [newReg, ...current];
-    localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
-    setRegistrations(updated);
-
     setLoading(false);
-    alert("PENDAFTARAN BERHASIL!\n\nData Anda telah dikirim. Kami akan menggunakan data lokal jika cloud sedang lambat. Silakan hubungi Admin untuk aktivasi.");
+    alert("PENDAFTARAN TERKIRIM!\nData Anda sedang diproses oleh tim Socialflow.");
     setAuthState('login');
     setRegName(''); setRegEmail(''); setRegPassword('');
   };
@@ -381,11 +373,11 @@ const App: React.FC = () => {
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-sm ${isSyncing ? 'bg-blue-50 text-blue-400' : (syncError ? 'bg-rose-50 text-rose-400 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-400 hover:bg-emerald-100')}`}
                  >
                     {isSyncing ? <Loader2 size={12} className="animate-spin" /> : (syncError ? <AlertTriangle size={12} /> : <RefreshCw size={12} />)}
-                    {isSyncing ? 'Syncing...' : (dbSourceUrl ? (syncError ? 'Cloud Slow' : 'Cloud Sync') : 'Local Mode')}
+                    {isSyncing ? 'Syncing...' : (dbSourceUrl ? (syncError ? 'Cloud Slow' : (activeTab === 'devPortal' ? 'Turbo Sync' : 'Cloud Sync')) : 'Local Mode')}
                  </button>
                  <div className="text-right">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-end gap-1.5">Last Sync: {lastSyncTime}</p>
-                    <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">Snaillabs V2.8</p>
+                    <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">Snaillabs V2.9</p>
                  </div>
               </div>
             </header>
