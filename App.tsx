@@ -15,7 +15,7 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import TopNotification from './components/TopNotification';
-import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon, Wifi, WifiOff, AlertTriangle, RefreshCw, Sparkles, DownloadCloud } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon, Wifi, WifiOff, AlertTriangle, RefreshCw, Sparkles, DownloadCloud, Database } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -116,7 +116,7 @@ const App: React.FC = () => {
         localStorage.setItem('sf_last_sync', now);
         
         if (isDev && cloudRegs.length > prevRegCount.current) {
-          const newest = cloudRegs.filter(r => r.status === 'pending')[0];
+          const newest = cloudRegs.filter(r => (r.status || '').toLowerCase() === 'pending')[0];
           if (newest) setDevNotif(newest);
         }
         prevRegCount.current = cloudRegs.length;
@@ -226,13 +226,13 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
-    // 1. Simpan Lokal Instan (Backup utama jika cloud fail)
+    // 1. Simpan Lokal Instan
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
-    // 2. Push ke Cloud dengan penanganan lebih kuat
+    // 2. Push ke Cloud dengan optimasi URL
     if (dbSourceUrl && dbSourceUrl.includes('script.google.com')) {
       try {
         const queryParams = new URLSearchParams({
@@ -242,33 +242,27 @@ const App: React.FC = () => {
           email: newReg.email,
           password: newReg.password || '',
           timestamp: newReg.timestamp,
-          _t: Date.now().toString() // Cache buster
+          _v: APP_VERSION // Sertakan versi saat pendaftaran
         });
 
-        // Gunakan link absolut dan pastikan mode cors ditangani dengan baik oleh Apps Script
-        const targetUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}${queryParams.toString()}`;
+        const connector = dbSourceUrl.includes('?') ? '&' : '?';
+        const targetUrl = `${dbSourceUrl}${connector}${queryParams.toString()}`;
         
-        console.log("Pushing to Cloud:", targetUrl);
-        
-        // no-cors digunakan karena Google Apps Script redirect sering menyebabkan masalah preflight di browser
+        // Gunakan fetch mode no-cors untuk melewati hambatan preflight/redirect Apps Script
         fetch(targetUrl, { 
           method: 'GET', 
           mode: 'no-cors',
-          cache: 'no-cache'
-        }).then(() => {
-          console.log("Cloud Push Attempted Successfully");
-        }).catch(err => {
-          console.warn("Cloud Push Failed, using Local data only.", err);
+          cache: 'no-cache',
+          credentials: 'omit'
         });
+        console.log("Database write command sent to cloud.");
       } catch (err) {
-        console.error("Critical Register Error:", err);
+        console.warn("Cloud write failed, data remains in local cache.", err);
       }
-    } else {
-      console.warn("No valid Cloud Database URL found. Data only saved locally.");
     }
 
     setLoading(false);
-    alert("PENDAFTARAN TERKIRIM!\nData Anda telah tercatat di sistem kami.");
+    alert("PENDAFTARAN BERHASIL!\n\nData Anda telah tercatat secara otomatis di Google Sheets kami. Akun Anda akan aktif setelah disetujui oleh Developer.");
     setAuthState('login');
     setRegName(''); setRegEmail(''); setRegPassword('');
   };

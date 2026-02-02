@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, RegistrationRequest } from '../types';
-import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2, Link2, Globe, Server, Code, Copy, Info, Clock, Zap } from 'lucide-react';
+import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2, Link2, Globe, Server, Code, Copy, Info, Clock, Zap, Wifi, AlertTriangle } from 'lucide-react';
 import { APP_VERSION } from '../constants';
 
 interface DevPortalProps {
@@ -19,9 +19,13 @@ interface DevPortalProps {
 
 const APPS_SCRIPT_CODE = `
 /**
- * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2.9.6 - WRITE-RELIABILITY)
- * 1. Extensions > Apps Script > Paste This.
- * 2. Sheet name must be: "Registrations"
+ * GOOGLE APPS SCRIPT - SOCIALFLOW V2.9.7 (RELIABLE WRITE)
+ * Panduan Pasang:
+ * 1. Buka sheet, beri nama sheet "Registrations"
+ * 2. Baris 1 ketik: id, name, email, password, timestamp, status
+ * 3. Extensions > Apps Script > Paste script ini.
+ * 4. Deploy > New Deployment > Web App > Execute as: ME > Who has access: ANYONE.
+ * 5. Izinkan semua izin otorisasi saat pop-up muncul.
  */
 
 var CURRENT_APP_VERSION = "${APP_VERSION}";
@@ -35,14 +39,14 @@ function doGet(e) {
     if (action === 'register' || action === 'updateStatus') {
       if (action === 'register') {
         sheet.appendRow([
-          e.parameter.id || "", 
-          e.parameter.name || "", 
-          e.parameter.email || "", 
+          e.parameter.id || "N/A", 
+          e.parameter.name || "Unknown", 
+          e.parameter.email || "Unknown", 
           e.parameter.password || "", 
-          e.parameter.timestamp || "", 
+          e.parameter.timestamp || new Date().toLocaleString(), 
           'pending'
         ]);
-        SpreadsheetApp.flush(); // Paksa tulis data segera
+        SpreadsheetApp.flush(); // Memaksa Google Sheets mencatat data saat ini juga
       } else {
         var data = sheet.getDataRange().getValues();
         var id = e.parameter.id;
@@ -75,7 +79,7 @@ function doGet(e) {
     return createResponse({error: err.toString()});
   }
 
-  return ContentService.createTextOutput("Socialflow Backend Active");
+  return ContentService.createTextOutput("Socialflow Backend V2.9.7 Connected");
 }
 
 function createResponse(data) {
@@ -99,7 +103,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
   onManualSync,
   lastSync
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showDbSettings, setShowDbSettings] = useState(false);
   const [showScriptInfo, setShowScriptInfo] = useState(false);
@@ -112,8 +115,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
   };
 
   const saveDbConfig = () => {
-    if (!tempUrl.includes('script.google.com')) {
-      alert("URL tidak valid!");
+    if (!tempUrl || !tempUrl.includes('script.google.com')) {
+      alert("Masukkan URL Apps Script (/exec) yang valid!");
       return;
     }
     setDbSourceUrl(tempUrl);
@@ -123,8 +126,10 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
   const copyCode = () => {
     navigator.clipboard.writeText(APPS_SCRIPT_CODE);
-    alert("Kode V2.9.6 disalin!");
+    alert("Kode V2.9.7 disalin! Silakan pasang di Apps Script.");
   };
+
+  const pendingCount = registrations.filter(r => (r.status || '').toLowerCase() === 'pending').length;
 
   return (
     <div className="space-y-12 animate-slide pb-20">
@@ -133,37 +138,37 @@ const DevPortal: React.FC<DevPortalProps> = ({
            <Zap size={200} className="text-blue-400" />
         </div>
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
-           <div className="space-y-2">
-              <h1 className="text-4xl font-black flex items-center gap-4"><Database className="text-blue-400" /> Database Dev</h1>
+           <div className="space-y-3">
               <div className="flex items-center gap-3">
-                 <p className="text-gray-400 font-medium">Panel Kontrol Cloud Socialflow.</p>
-                 <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-500/20 rounded-full border border-blue-400/30">
-                    <Zap size={10} className="text-blue-300 animate-pulse" />
-                    <span className="text-[8px] font-black uppercase tracking-widest text-blue-300">V{APP_VERSION} - Reliability Fix</span>
-                 </div>
+                <div className={`px-4 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${dbSourceUrl ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-rose-500/10 border-rose-500/50 text-rose-400'}`}>
+                   {dbSourceUrl ? <Wifi size={12}/> : <AlertTriangle size={12}/>}
+                   {dbSourceUrl ? 'Cloud Connected' : 'Local Cache Only'}
+                </div>
               </div>
+              <h1 className="text-4xl font-black flex items-center gap-4"><Database className="text-blue-400" /> Dev Portal</h1>
+              <p className="text-gray-400 font-medium">Monitoring pendaftaran & sinkronisasi Google Sheets.</p>
            </div>
            <div className="flex gap-4">
-             <button onClick={() => setShowDbSettings(!showDbSettings)} className={`p-4 rounded-2xl transition-all ${showDbSettings ? 'bg-blue-500 shadow-lg' : 'bg-white/5 border border-white/10'}`}><Server size={20} /></button>
-             <button onClick={() => setShowScriptInfo(!showScriptInfo)} className={`p-4 rounded-2xl transition-all ${showScriptInfo ? 'bg-amber-500 shadow-lg' : 'bg-white/5 border border-white/10'}`}><Code size={20} /></button>
-             <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-3xl text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-300">Pendaftar</p>
-                <p className="text-3xl font-black">{registrations.filter(r => (r.status || '').toLowerCase() === 'pending').length}</p>
+             <button onClick={() => setShowDbSettings(!showDbSettings)} className={`p-4 rounded-2xl transition-all ${showDbSettings ? 'bg-blue-500 shadow-lg shadow-blue-500/40' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`} title="Settings Database"><Server size={20} /></button>
+             <button onClick={() => setShowScriptInfo(!showScriptInfo)} className={`p-4 rounded-2xl transition-all ${showScriptInfo ? 'bg-amber-500 shadow-lg shadow-amber-500/40' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`} title="Copy Apps Script"><Code size={20} /></button>
+             <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-3xl text-center backdrop-blur-md">
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-300">Antrian</p>
+                <p className="text-3xl font-black">{pendingCount}</p>
              </div>
            </div>
         </div>
 
         {showDbSettings && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide">
-             <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-blue-400">Deployment Config</h3>
-             <div className="flex gap-3">
-                <input value={tempUrl} onChange={e => setTempUrl(e.target.value)} placeholder="URL Google Script (/exec)" className="flex-1 bg-black/20 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 text-blue-300" />
-                <button onClick={saveDbConfig} className="px-8 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Connect</button>
+             <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-blue-400">Google Apps Script Deployment URL</h3>
+             <div className="flex flex-col md:flex-row gap-3">
+                <input value={tempUrl} onChange={e => setTempUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 text-blue-200" />
+                <button onClick={saveDbConfig} className="px-8 py-4 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">Hubungkan</button>
              </div>
-             <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
-                <p className="text-[10px] text-amber-400 font-bold leading-relaxed uppercase tracking-wider">
-                  ⚠️ PENTING: Saat Deploy di Google Script, pilih "Execute as: ME" dan "Who has access: ANYONE". 
-                  Setelah Deploy, pastikan Anda mengizinkan (Allow) akses akun saat pop-up otorisasi muncul.
+             <div className="mt-6 flex gap-4 p-5 bg-blue-500/10 rounded-2xl border border-blue-500/20">
+                <Info size={24} className="text-blue-400 shrink-0" />
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                   Pastikan URL yang dimasukkan berakhiran <span className="text-blue-300 font-bold">/exec</span>. Jika Anda baru saja memperbarui script, Anda harus melakukan <span className="text-blue-300 font-bold">New Deployment</span> untuk mendapatkan URL versi terbaru.
                 </p>
              </div>
           </div>
@@ -172,8 +177,11 @@ const DevPortal: React.FC<DevPortalProps> = ({
         {showScriptInfo && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide space-y-4">
              <div className="flex justify-between items-center">
-                <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-amber-400"><Code size={14}/> Reliable-Push Script</h3>
-                <button onClick={copyCode} className="flex items-center gap-2 px-4 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-[10px] font-black hover:bg-amber-500/30 transition-all"><Copy size={14}/> Copy Code</button>
+                <div className="space-y-1">
+                   <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-amber-400"><Code size={14}/> Apps Script Core V2.9.7</h3>
+                   <p className="text-[9px] text-gray-500 font-bold uppercase">Gunakan ini untuk sinkronisasi otomatis ke Google Sheets</p>
+                </div>
+                <button onClick={copyCode} className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl text-[10px] font-black hover:brightness-110 transition-all shadow-lg shadow-amber-500/20"><Copy size={14}/> Salin Kode</button>
              </div>
              <pre className="p-6 bg-black/40 rounded-2xl text-[10px] font-mono text-amber-100 overflow-x-auto border border-white/5 max-h-60 custom-scrollbar leading-relaxed">
                 {APPS_SCRIPT_CODE}
@@ -185,45 +193,62 @@ const DevPortal: React.FC<DevPortalProps> = ({
       <section className="space-y-6">
         <div className="flex justify-between items-center px-4">
           <div className="space-y-1">
-             <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Antrian Member Baru</h3>
-             <p className="text-[10px] text-gray-300 font-bold uppercase flex items-center gap-1.5"><Clock size={10}/> Terakhir Sinkron: {lastSync || '---'}</p>
+             <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Permintaan Akses Masuk</h3>
+             <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Polling Aktif (10s) • Sync: {lastSync || 'Never'}</p>
+             </div>
           </div>
-          <button onClick={handleRefreshDatabase} disabled={isRefreshing} className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 shadow-lg shadow-blue-100 transition-all active:scale-95">
+          <button onClick={handleRefreshDatabase} disabled={isRefreshing} className="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 shadow-xl shadow-blue-100 transition-all active:scale-95">
             {isRefreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            <span>Sync Cloud</span>
+            <span>Sync Sekarang</span>
           </button>
         </div>
         
-        <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
+        <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm ring-1 ring-black/5">
            <table className="w-full text-left">
               <thead className="bg-gray-50/50">
                  <tr>
-                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Calon Member</th>
-                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Tindakan Cepat</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Identitas Pendaftar</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Waktu Daftar</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Tindakan</th>
                  </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                  {registrations.filter(r => (r.status || '').toLowerCase() === 'pending').map(r => (
-                    <tr key={r.id} className="hover:bg-gray-50/50 transition-all">
+                    <tr key={r.id} className="hover:bg-gray-50/50 transition-all group">
                        <td className="px-10 py-6">
                           <div className="flex items-center gap-4">
-                             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 font-black text-xs">{r.name ? r.name.charAt(0).toUpperCase() : '?'}</div>
+                             <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 font-black text-sm border border-blue-100 group-hover:scale-110 transition-transform">{r.name ? r.name.charAt(0).toUpperCase() : '?'}</div>
                              <div>
                                 <p className="text-sm font-black text-gray-900">{r.name}</p>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase">{r.email}</p>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{r.email}</p>
                              </div>
                           </div>
                        </td>
                        <td className="px-10 py-6">
+                          <div className="flex items-center gap-2 text-gray-400">
+                             <Clock size={12}/>
+                             <span className="text-[11px] font-bold">{r.timestamp}</span>
+                          </div>
+                       </td>
+                       <td className="px-10 py-6">
                           <div className="flex justify-center gap-3">
-                              <button onClick={() => onRegistrationAction(r.id, 'approved')} className="px-6 py-3 bg-emerald-500 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md">Approve</button>
-                              <button onClick={() => onRegistrationAction(r.id, 'rejected')} className="px-6 py-3 bg-rose-500 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md">Reject</button>
+                              <button onClick={() => onRegistrationAction(r.id, 'approved')} className="px-6 py-3 bg-emerald-500 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-emerald-100">Approve</button>
+                              <button onClick={() => onRegistrationAction(r.id, 'rejected')} className="px-6 py-3 bg-rose-500 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-rose-100">Reject</button>
                           </div>
                        </td>
                     </tr>
                  ))}
-                 {registrations.filter(r => (r.status || '').toLowerCase() === 'pending').length === 0 && (
-                   <tr><td colSpan={2} className="py-20 text-center text-gray-300 font-black uppercase text-[10px] tracking-widest">Antrian pendaftaran kosong saat ini.</td></tr>
+                 {pendingCount === 0 && (
+                   <tr>
+                      <td colSpan={3} className="py-24 text-center">
+                         <div className="flex flex-col items-center gap-4 opacity-30">
+                            <Database size={48} className="text-gray-300"/>
+                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">Tidak Ada Pendaftaran Tertunda</p>
+                         </div>
+                      </td>
+                   </tr>
                  )}
               </tbody>
            </table>
