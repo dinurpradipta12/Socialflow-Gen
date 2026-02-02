@@ -25,12 +25,13 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  whatsapp?: string; // Field baru
+  password?: string; // Field password untuk login
+  whatsapp?: string;
   role: UserRole;
   avatar?: string;
   permissions: Permissions;
   isSubscribed: boolean;
-  activationDate?: string; // Field baru
+  activationDate?: string;
   subscriptionExpiry?: string;
   status?: 'active' | 'suspended' | 'expired';
   jobdesk: string;

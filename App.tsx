@@ -15,7 +15,7 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import { cloudService } from './services/cloudService';
-import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone } from 'lucide-react';
+import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff } from 'lucide-react';
 
 const cloudSyncChannel = new BroadcastChannel('sf_cloud_sync');
 
@@ -30,15 +30,15 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
   
-  const [authState, setAuthState] = useState<'login' | 'register' | 'authenticated' | 'expired'>(user ? 'authenticated' : 'login');
+  const [authState, setAuthState] = useState<'login' | 'authenticated' | 'expired'>(user ? 'authenticated' : 'login');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCloudOnline, setIsCloudOnline] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [regData, setRegData] = useState({ name: '', email: '', password: '', handle: '', niche: '', reason: '' });
   
   const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
@@ -87,7 +87,6 @@ const App: React.FC = () => {
 
   const handleRegistrationAction = async (regId: string, status: 'approved' | 'rejected') => {
     setLoading(true);
-    // Fixed: Renamed updateRegistrationAction to updateRegistrationStatus as it was defined in services/cloudService.ts
     await cloudService.updateRegistrationStatus(regId, status);
     
     if (status === 'approved') {
@@ -98,6 +97,7 @@ const App: React.FC = () => {
             id: `U-${Date.now()}`,
             name: reg.name,
             email: reg.email,
+            password: reg.password || 'Social123',
             role: 'viewer',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
             permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
@@ -122,14 +122,14 @@ const App: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
-      const loggedInUser = allUsers.find(u => u.email === email);
+      // Logic login: Cek dev credentials dulu, lalu cek database allUsers
       const isDevLogin = email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password;
+      const loggedInUser = allUsers.find(u => u.email === email && (isDevLogin || u.password === password || (!u.password && password === 'Social123')));
       
-      if (loggedInUser && (isDevLogin || email !== DEV_CREDENTIALS.email)) {
+      if (loggedInUser) {
         setUser(loggedInUser);
         localStorage.setItem('sf_session_user', JSON.stringify(loggedInUser));
         
-        // Cek expiry saat login
         const today = new Date();
         if (loggedInUser.subscriptionExpiry && today > new Date(loggedInUser.subscriptionExpiry) && loggedInUser.role !== 'developer') {
           setAuthState('expired');
@@ -137,29 +137,10 @@ const App: React.FC = () => {
           setAuthState('authenticated');
         }
       } else {
-        alert('Email atau Security Code tidak valid.');
+        alert('Akses Ditolak. Email atau Security Code salah.');
       }
       setLoading(false);
     }, 800);
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const newReg: RegistrationRequest = {
-      id: `REG-${Date.now()}`,
-      ...regData,
-      timestamp: new Date().toLocaleString('id-ID'),
-      status: 'pending',
-      nodeId: navigator.userAgent.substring(0, 15)
-    };
-    const success = await cloudService.pushRegistration(newReg);
-    if (success) {
-      alert(`Pendaftaran berhasil! Tunggu Admin mengaktifkan akun Anda.`);
-      setAuthState('login');
-      setRegData({ name: '', email: '', password: '', handle: '', niche: '', reason: '' });
-    }
-    setLoading(false);
   };
 
   const saveAnalytics = (insight: PostInsight | PostInsight[]) => {
@@ -171,7 +152,6 @@ const App: React.FC = () => {
   const isDev = user?.role === 'developer';
   const activeWorkspace = MOCK_WORKSPACES[0];
 
-  // --- EXPIRED PAGE UI ---
   if (authState === 'expired') {
      return (
         <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 font-sans">
@@ -194,42 +174,47 @@ const App: React.FC = () => {
      );
   }
 
-  if (authState === 'login' || authState === 'register') {
+  if (authState === 'login') {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
-        <div className="max-w-[440px] w-full bg-white rounded-[3rem] shadow-2xl p-10 md:p-14 space-y-10 border border-gray-100 animate-slide">
+        <div className="max-w-[440px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-12 border border-gray-100 animate-slide">
           <div className="text-center space-y-4">
              <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">SF</div>
-             <h1 className="text-3xl font-black text-gray-900 tracking-tighter">
-                {authState === 'login' ? 'Socialflow' : 'Join Network'}
-             </h1>
+             <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Socialflow</h1>
              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-                <ShieldCheck size={12} className="text-blue-500"/> System Core V3.4.0
+                <ShieldCheck size={12} className="text-blue-500"/> Closed System Core V3.5.0
              </p>
           </div>
 
-          {authState === 'login' ? (
-            <form onSubmit={handleLogin} className="space-y-5">
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all text-sm" placeholder="Email Address" />
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all text-sm" placeholder="Security Code" />
-              <button type="submit" disabled={loading} className="w-full py-6 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all">
-                {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Access System"}
-              </button>
-              <p className="text-center text-[10px] text-gray-400 font-medium uppercase tracking-widest">No access? <button type="button" onClick={() => setAuthState('register')} className="text-blue-500 font-black">Register Here</button></p>
-            </form>
-          ) : (
-            <form onSubmit={handleRegister} className="space-y-4">
-               <div className="grid grid-cols-2 gap-4">
-                  <input type="text" required value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="Name" />
-                  <input type="email" required value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="Email" />
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+               <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Email Address</label>
+               <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all text-sm" placeholder="user@snaillabs.id" />
+            </div>
+            
+            <div className="space-y-2">
+               <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Security Code</label>
+               <div className="relative">
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    required value={password} onChange={e => setPassword(e.target.value)} 
+                    className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all text-sm" 
+                    placeholder="••••••••" 
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 transition-colors">
+                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
                </div>
-               <input type="password" required value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 text-sm" placeholder="Create Security Code" />
-               <button type="submit" disabled={loading} className="w-full py-6 bg-emerald-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-emerald-500/20">
-                {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : "Submit Application"}
-              </button>
-              <button type="button" onClick={() => setAuthState('login')} className="w-full text-[10px] font-black text-gray-400 uppercase tracking-widest">Back to Login</button>
-            </form>
-          )}
+            </div>
+
+            <button type="submit" disabled={loading} className="w-full py-6 bg-blue-500 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3">
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <>Access System <ArrowRight size={16}/></>}
+            </button>
+            
+            <p className="text-center text-[10px] text-gray-300 font-bold uppercase tracking-widest italic">
+              Akses terbatas. Hubungi Admin untuk aktivasi.
+            </p>
+          </form>
         </div>
       </div>
     );
@@ -249,7 +234,7 @@ const App: React.FC = () => {
       <main className={`flex-1 transition-all duration-300 min-h-screen md:ml-72 p-6 md:p-12 relative`}>
         <div className="flex items-center justify-between mb-8 md:hidden">
            <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm"><Menu size={24} /></button>
-           <h2 className="text-sm font-black text-gray-900 tracking-tighter uppercase">{isDev ? 'Developer Mode' : 'Socialflow Hub'}</h2>
+           <h2 className="text-sm font-black text-gray-900 tracking-tighter uppercase">{isDev ? 'Developer Access' : 'Socialflow Hub'}</h2>
         </div>
 
         <div className="max-w-6xl mx-auto w-full">
