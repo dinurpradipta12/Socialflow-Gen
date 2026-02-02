@@ -15,7 +15,7 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import TopNotification from './components/TopNotification';
-import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { Mail, Lock, Loader2, CheckCircle, Bell, X, Shield, ArrowRight, UserPlus, Eye, EyeOff, PlusCircle, Link as LinkIcon, Wifi, WifiOff, AlertTriangle, RefreshCw } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -62,33 +62,46 @@ const App: React.FC = () => {
   const [devNotif, setDevNotif] = useState<RegistrationRequest | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncTime, setLastSyncTime] = useState<string>(localStorage.getItem('sf_last_sync') || 'Never');
 
   const prevRegCount = useRef(registrations.length);
   const isDev = user?.role === 'developer';
 
   const syncWithCloud = useCallback(async (isManual = false) => {
     if (!dbSourceUrl || !dbSourceUrl.includes('script.google.com')) {
-      if (isManual) alert("URL Cloud belum diatur. Masuk ke Dev Portal untuk mengatur URL Web App.");
+      if (isManual) alert("URL Cloud belum diatur di Dev Portal.");
       return;
     }
+    
+    // Jangan sync jika sedang berjalan, kecuali manual
     if (!isManual && isSyncing) return;
 
     setIsSyncing(true);
     setSyncError(null);
 
+    // Smart Timeout Logic: Jika 5 detik tidak ada respon, anggap gagal/lambat
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     try {
       const res = await fetch(`${dbSourceUrl}?action=getRegistrations&_t=${Date.now()}`, {
         method: 'GET',
         mode: 'cors',
-        redirect: 'follow'
+        redirect: 'follow',
+        signal: controller.signal
       });
       
+      clearTimeout(timeoutId);
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const cloudData = await res.json();
       
       if (Array.isArray(cloudData)) {
         setRegistrations(cloudData);
         localStorage.setItem('sf_registrations_db', JSON.stringify(cloudData));
+        const now = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        setLastSyncTime(now);
+        localStorage.setItem('sf_last_sync', now);
         
         if (isDev && cloudData.length > prevRegCount.current) {
           const newest = cloudData.filter(r => r.status === 'pending')[0];
@@ -97,7 +110,12 @@ const App: React.FC = () => {
         prevRegCount.current = cloudData.length;
       }
     } catch (err: any) {
-      setSyncError(err.message || "Failed to fetch");
+      if (err.name === 'AbortError') {
+        setSyncError("Connection Timeout (Slow Cloud)");
+      } else {
+        setSyncError(err.message || "Failed to fetch");
+      }
+      console.warn("Sync slowed down, using local data.");
     } finally {
       setIsSyncing(false);
     }
@@ -105,8 +123,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (dbSourceUrl) {
+      // Sync awal tetap dilakukan tapi tidak memblokir render
       syncWithCloud();
-      const interval = setInterval(() => syncWithCloud(), 60000);
+      // Interval lebih lama (3 menit) agar tidak membebani koneksi
+      const interval = setInterval(() => syncWithCloud(), 180000);
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud]);
@@ -123,11 +143,11 @@ const App: React.FC = () => {
         params.append('id', regId);
         params.append('status', status);
 
-        await fetch(`${dbSourceUrl}?${params.toString()}`, { 
+        fetch(`${dbSourceUrl}?${params.toString()}`, { 
           method: 'GET', 
           mode: 'no-cors' 
         });
-      } catch (e) { console.error("Cloud Update Error", e); }
+      } catch (e) { console.error("Background Update Error", e); }
     }
     
     if (status === 'approved') {
@@ -177,7 +197,7 @@ const App: React.FC = () => {
         alert('Akses Ditolak: Kredensial salah atau akun belum diverifikasi.');
       }
       setLoading(false);
-    }, 1200);
+    }, 1000);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -193,43 +213,32 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
-    if (dbSourceUrl) {
-      if (!dbSourceUrl.includes('/exec')) {
-        alert("Peringatan: URL Database tidak valid (harus diakhiri /exec). Data mungkin hanya tersimpan secara lokal.");
-      } else {
-        try {
-          const params = new URLSearchParams();
-          params.append('action', 'register');
-          params.append('id', newReg.id);
-          params.append('name', newReg.name);
-          params.append('email', newReg.email);
-          params.append('password', newReg.password || '');
-          params.append('timestamp', newReg.timestamp);
+    if (dbSourceUrl && dbSourceUrl.includes('/exec')) {
+      const params = new URLSearchParams();
+      params.append('action', 'register');
+      params.append('id', newReg.id);
+      params.append('name', newReg.name);
+      params.append('email', newReg.email);
+      params.append('password', newReg.password || '');
+      params.append('timestamp', newReg.timestamp);
 
-          // PENTING: Gunakan mode: 'no-cors' agar request tetap terkirim meskipun browser menganggap ada CORS error
-          await fetch(`${dbSourceUrl}?${params.toString()}`, {
-            method: 'GET',
-            mode: 'no-cors'
-          });
-          console.log("Cloud request sent.");
-        } catch (err) {
-          console.warn("Koneksi Cloud gagal:", err);
-        }
-      }
+      // Kirim ke cloud tanpa menunggu respon lama
+      fetch(`${dbSourceUrl}?${params.toString()}`, {
+        method: 'GET',
+        mode: 'no-cors'
+      });
     }
 
-    // Selalu simpan di lokal sebagai backup
+    // Selalu simpan di lokal agar UI instan
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
-    setTimeout(() => {
-      setLoading(false);
-      alert("PENDAFTARAN BERHASIL!\n\nData Anda telah dikirim ke tim Socialflow. Silakan hubungi Admin untuk proses aktivasi akun Anda.");
-      setAuthState('login');
-      setRegName(''); setRegEmail(''); setRegPassword('');
-    }, 1500);
+    setLoading(false);
+    alert("PENDAFTARAN BERHASIL!\n\nData Anda telah dikirim. Kami akan menggunakan data lokal jika cloud sedang lambat. Silakan hubungi Admin untuk aktivasi.");
+    setAuthState('login');
+    setRegName(''); setRegEmail(''); setRegPassword('');
   };
 
   const handleLogout = () => {
@@ -285,6 +294,7 @@ const App: React.FC = () => {
           dbSourceUrl={dbSourceUrl}
           setDbSourceUrl={(url) => { setDbSourceUrl(url); localStorage.setItem('sf_db_source', url); }}
           onManualSync={() => syncWithCloud(true)}
+          lastSync={lastSyncTime}
         />
       ) : null;
       default: return <Dashboard primaryColor={activeWorkspace.color} />;
@@ -365,13 +375,17 @@ const App: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center gap-6">
-                 <div className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isSyncing ? 'bg-blue-50 text-blue-400' : (syncError ? 'bg-rose-50 text-rose-400' : 'bg-emerald-50 text-emerald-400')}`}>
-                    {isSyncing ? <Loader2 size={12} className="animate-spin" /> : (syncError ? <AlertTriangle size={12} /> : <Wifi size={12} />)}
-                    {isSyncing ? 'Cloud Syncing...' : (dbSourceUrl ? (syncError ? 'Cloud Error' : 'Cloud Connected') : 'Local Only')}
-                 </div>
+                 <button 
+                    onClick={() => syncWithCloud(true)}
+                    disabled={isSyncing}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all shadow-sm ${isSyncing ? 'bg-blue-50 text-blue-400' : (syncError ? 'bg-rose-50 text-rose-400 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-400 hover:bg-emerald-100')}`}
+                 >
+                    {isSyncing ? <Loader2 size={12} className="animate-spin" /> : (syncError ? <AlertTriangle size={12} /> : <RefreshCw size={12} />)}
+                    {isSyncing ? 'Syncing...' : (dbSourceUrl ? (syncError ? 'Cloud Slow' : 'Cloud Sync') : 'Local Mode')}
+                 </button>
                  <div className="text-right">
-                    <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center justify-end gap-1.5"><CheckCircle size={10} /> Active Session</p>
-                    <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">UID: {user.id}</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center justify-end gap-1.5">Last Sync: {lastSyncTime}</p>
+                    <p className="text-[9px] text-gray-200 font-bold uppercase tracking-wider mt-0.5">Snaillabs V2.8</p>
                  </div>
               </div>
             </header>

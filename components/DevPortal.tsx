@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, RegistrationRequest } from '../types';
-import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2, Link2, Globe, Server, Code, Copy, Info } from 'lucide-react';
+import { Database, CalendarDays, RefreshCw, Power, ShieldCheck, Search, CheckCircle, XCircle, FileSpreadsheet, Trash2, Download, Loader2, Link2, Globe, Server, Code, Copy, Info, Clock } from 'lucide-react';
 
 interface DevPortalProps {
   primaryColorHex: string;
@@ -13,11 +13,12 @@ interface DevPortalProps {
   dbSourceUrl: string;
   setDbSourceUrl: (url: string) => void;
   onManualSync: () => void;
+  lastSync?: string;
 }
 
 const APPS_SCRIPT_CODE = `
 /**
- * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2.7 - FINAL FIX)
+ * GOOGLE APPS SCRIPT TEMPLATE FOR SOCIALFLOW (V2.8 - PERFORMANCE OPTIMIZED)
  * 1. Buka Google Sheet Anda.
  * 2. Extensions > Apps Script > Hapus semua kode lama & Tempel kode ini.
  * 3. Pastikan sheet pertama bernama: "Registrations" (Sesuai Screenshot).
@@ -33,9 +34,8 @@ const APPS_SCRIPT_CODE = `
 function doGet(e) {
   var action = e.parameter.action;
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('Registrations') || ss.getSheets()[0]; // Ambil sheet pertama jika nama tidak cocok
+  var sheet = ss.getSheetByName('Registrations') || ss.getSheets()[0];
 
-  // Handler: Register & Update via GET (Paling Stabil untuk Browser)
   if (action === 'register' || action === 'updateStatus') {
     if (action === 'register') {
       sheet.appendRow([
@@ -57,11 +57,9 @@ function doGet(e) {
         }
       }
     }
-    return ContentService.createTextOutput(JSON.stringify({status: "Success"}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return createJsonResponse({status: "Success"});
   }
 
-  // Handler: Fetch Data
   if (action === 'getRegistrations') {
     var data = sheet.getDataRange().getValues();
     var headers = data[0];
@@ -71,15 +69,19 @@ function doGet(e) {
       headers.forEach(function(header, i) { obj[header.toString().trim()] = row[i]; });
       return obj;
     });
-    return ContentService.createTextOutput(JSON.stringify(result))
-      .setMimeType(ContentService.MimeType.JSON);
+    return createJsonResponse(result);
   }
 
   return ContentService.createTextOutput("Socialflow Backend Active");
 }
 
+function createJsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function doPost(e) {
-  return doGet(e); // Allow POST to be handled by doGet logic
+  return doGet(e);
 }
 `;
 
@@ -92,7 +94,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
   setRegistrations,
   dbSourceUrl,
   setDbSourceUrl,
-  onManualSync
+  onManualSync,
+  lastSync
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -113,13 +116,12 @@ const DevPortal: React.FC<DevPortalProps> = ({
     }
     setDbSourceUrl(tempUrl);
     setShowDbSettings(false);
-    alert("Database Terkoneksi. Melakukan sinkronisasi data...");
     onManualSync();
   };
 
   const copyCode = () => {
     navigator.clipboard.writeText(APPS_SCRIPT_CODE);
-    alert("Kode Script disalin! Tempel di editor Google Apps Script.");
+    alert("Kode Script disalin!");
   };
 
   return (
@@ -131,8 +133,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
               <div className="flex items-center gap-3">
                  <p className="text-gray-400 font-medium">Panel Kontrol Cloud Socialflow.</p>
                  <div className="flex items-center gap-1.5 px-3 py-1 bg-white/5 rounded-full border border-white/10">
-                    <div className={`w-1.5 h-1.5 rounded-full ${dbSourceUrl ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></div>
-                    <span className="text-[8px] font-black uppercase tracking-widest">{dbSourceUrl ? 'Cloud Online' : 'Cloud Offline'}</span>
+                    <Clock size={10} className="text-blue-300" />
+                    <span className="text-[8px] font-black uppercase tracking-widest">Last Sync: {lastSync || '---'}</span>
                  </div>
               </div>
            </div>
@@ -153,7 +155,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                 <input value={tempUrl} onChange={e => setTempUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" className="flex-1 bg-black/20 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 text-blue-300" />
                 <button onClick={saveDbConfig} className="px-8 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">Update</button>
              </div>
-             <p className="mt-4 text-[10px] text-gray-400 font-medium italic">Pastikan Deployment diset ke "Anyone" agar aplikasi bisa mengirim data.</p>
+             <p className="mt-4 text-[10px] text-amber-400 font-bold italic">PENTING: Aplikasi sekarang menggunakan sistem Local-First. Jika Cloud lambat, data tetap tersimpan di browser Anda.</p>
           </div>
         )}
 
@@ -175,7 +177,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
           <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Antrian Member Baru</h3>
           <button onClick={handleRefreshDatabase} disabled={isRefreshing} className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 shadow-lg shadow-blue-100">
             {isRefreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            <span>Sync Cloud Data</span>
+            <span>Force Cloud Sync</span>
           </button>
         </div>
         
