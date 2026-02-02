@@ -15,7 +15,7 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import { cloudService } from './services/cloudService';
-import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
 const cloudSyncChannel = new BroadcastChannel('sf_cloud_sync');
 
@@ -35,6 +35,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,7 +58,6 @@ const App: React.FC = () => {
         }
       }
       
-      // Developer role auto-redirect
       if (user.role === 'developer' && activeTab !== 'devPortal') {
         setActiveTab('devPortal');
       }
@@ -120,25 +120,38 @@ const App: React.FC = () => {
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setLoginError(null);
+
     setTimeout(() => {
       const isDevLogin = email === DEV_CREDENTIALS.email && password === DEV_CREDENTIALS.password;
-      const loggedInUser = allUsers.find(u => u.email === email && (isDevLogin || u.password === password || (!u.password && password === 'Social123')));
       
-      if (loggedInUser) {
-        setUser(loggedInUser);
-        localStorage.setItem('sf_session_user', JSON.stringify(loggedInUser));
+      // Step 1: Cari User
+      const foundUser = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+      
+      if (!foundUser) {
+        setLoginError("Email belum terdaftar dalam sistem.");
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: Validasi Password
+      const isPasswordCorrect = foundUser.password === password || (!foundUser.password && password === 'Social123');
+      
+      if (isDevLogin || isPasswordCorrect) {
+        setUser(foundUser);
+        localStorage.setItem('sf_session_user', JSON.stringify(foundUser));
         
         const today = new Date();
-        if (loggedInUser.subscriptionExpiry && today > new Date(loggedInUser.subscriptionExpiry) && loggedInUser.role !== 'developer') {
+        if (foundUser.subscriptionExpiry && today > new Date(foundUser.subscriptionExpiry) && foundUser.role !== 'developer') {
           setAuthState('expired');
         } else {
           setAuthState('authenticated');
         }
       } else {
-        alert('Akses Ditolak. Email atau Security Code salah.');
+        setLoginError("Security Code tidak valid. Silakan coba lagi.");
       }
       setLoading(false);
-    }, 800);
+    }, 1000);
   };
 
   const saveAnalytics = (insight: PostInsight | PostInsight[]) => {
@@ -180,14 +193,21 @@ const App: React.FC = () => {
              <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">SF</div>
              <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Socialflow</h1>
              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-                <ShieldCheck size={12} className="text-blue-500"/> Closed System Core V3.6.0
+                <ShieldCheck size={12} className="text-blue-500"/> Closed System Core V3.7.0
              </p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
+            {loginError && (
+              <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 animate-slide">
+                 <AlertTriangle size={18} className="text-rose-500 shrink-0" />
+                 <p className="text-[11px] font-bold text-rose-600 leading-tight">{loginError}</p>
+              </div>
+            )}
+
             <div className="space-y-2">
                <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Email Address</label>
-               <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all text-sm" placeholder="user@snaillabs.id" />
+               <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={`w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Email") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} placeholder="user@snaillabs.id" />
             </div>
             
             <div className="space-y-2">
@@ -196,7 +216,7 @@ const App: React.FC = () => {
                   <input 
                     type={showPassword ? "text" : "password"} 
                     required value={password} onChange={e => setPassword(e.target.value)} 
-                    className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all text-sm" 
+                    className={`w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Code") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} 
                     placeholder="••••••••" 
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 transition-colors">
