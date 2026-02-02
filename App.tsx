@@ -78,7 +78,7 @@ const App: React.FC = () => {
     setSyncError(null);
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const res = await fetch(`${dbSourceUrl}?action=getRegistrations&_t=${Date.now()}`, {
@@ -103,9 +103,7 @@ const App: React.FC = () => {
         latestVer = responseData.app_version || responseData.version;
       }
 
-      // Logic: Jika versi di cloud lebih tinggi dari versi aplikasi saat ini
       if (latestVer && latestVer !== APP_VERSION) {
-        console.log(`Pembaruan Sistem Tersedia: ${APP_VERSION} -> ${latestVer}`);
         setCloudVersion(latestVer);
         setUpdateAvailable(true);
       }
@@ -133,19 +131,16 @@ const App: React.FC = () => {
   useEffect(() => {
     if (dbSourceUrl) {
       syncWithCloud();
-      const intervalTime = activeTab === 'devPortal' ? 10000 : 60000; // Cek tiap 1 menit jika sedang bekerja
+      // Turbo Polling: 5 detik jika di Dev Portal, 60 detik jika di tempat lain
+      const intervalTime = activeTab === 'devPortal' ? 5000 : 60000; 
       const interval = setInterval(() => syncWithCloud(), intervalTime);
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud, activeTab]);
 
-  // Handler Update Versi Baru
   const handleUpdateApp = () => {
     setLoading(true);
-    // 1. Simpan sesi terakhir (opsional, sudah di localstorage)
     if (user) localStorage.setItem('sf_session_user', JSON.stringify(user));
-    
-    // 2. Refresh halaman dengan cache-busting untuk memaksa browser mengambil deploy terbaru
     setTimeout(() => {
       const currentUrl = new URL(window.location.href);
       currentUrl.searchParams.set('v_update', Date.now().toString());
@@ -154,10 +149,12 @@ const App: React.FC = () => {
   };
 
   const handleRegistrationAction = useCallback(async (regId: string, status: 'approved' | 'rejected') => {
+    // 1. OPTIMISTIC UPDATE: Update UI Lokal dulu supaya instan
     const updated = registrations.map(r => r.id === regId ? { ...r, status } : r);
     setRegistrations(updated);
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
 
+    // 2. KIRIM KE CLOUD
     if (dbSourceUrl) {
       try {
         const params = new URLSearchParams();
@@ -165,13 +162,20 @@ const App: React.FC = () => {
         params.append('id', regId);
         params.append('status', status);
 
-        fetch(`${dbSourceUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors', keepalive: true })
-          .then(() => {
-            setTimeout(() => syncWithCloud(true), 2000);
-          });
+        // Gunakan image pixel ping sebagai backup yang sangat bandel untuk write
+        const pingUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}${params.toString()}&_t=${Date.now()}`;
+        
+        fetch(pingUrl, { method: 'GET', mode: 'no-cors', keepalive: true });
+        
+        const img = new Image();
+        img.src = pingUrl + "&ping=1";
+
+        // Tunggu sebentar lalu tarik data terbaru untuk memastikan sinkronisasi
+        setTimeout(() => syncWithCloud(true), 3000);
       } catch (e) { console.error("Cloud Update Error", e); }
     }
     
+    // Jika disetujui, buat user baru di database lokal
     if (status === 'approved') {
       const reg = registrations.find(r => r.id === regId);
       if (reg) {
@@ -267,7 +271,7 @@ const App: React.FC = () => {
 
     setTimeout(() => {
       setLoading(false);
-      alert(`PENDAFTARAN BERHASIL!\n\nNama: ${newReg.name}\nEmail: ${newReg.email}\n\nData Anda telah dikirim ke database Cloud Socialflow.`);
+      alert(`PENDAFTARAN TERKIRIM!\n\nNama: ${newReg.name}\n\nData Anda telah dikirim ke database Cloud.`);
       setAuthState('login');
       setRegName(''); setRegEmail(''); setRegPassword('');
     }, 300);
@@ -401,7 +405,6 @@ const App: React.FC = () => {
             appLogo={customLogo}
           />
           <main className="flex-1 ml-72 p-10 min-h-screen overflow-x-hidden relative">
-            {/* Banner Update Modern */}
             {updateAvailable && (
               <div className="mb-10 p-6 bg-white border-2 border-blue-400 rounded-[2.5rem] shadow-[0_20px_50px_rgba(59,130,246,0.15)] flex flex-col md:flex-row items-center justify-between animate-slide gap-6 ring-8 ring-blue-50/50">
                 <div className="flex items-center gap-5">
@@ -414,7 +417,7 @@ const App: React.FC = () => {
                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">System Update Available</p>
                     </div>
                     <p className="text-lg font-black text-gray-900">Versi {cloudVersion} Telah Dirilis!</p>
-                    <p className="text-xs text-gray-400 font-medium">Klik perbarui untuk mendapatkan fitur dan perbaikan terbaru dari sistem Snaillabs.</p>
+                    <p className="text-xs text-gray-400 font-medium">Klik perbarui untuk mendapatkan fitur terbaru.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -425,7 +428,7 @@ const App: React.FC = () => {
                     className="px-10 py-4 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/30 flex items-center gap-2 hover:scale-105 transition-all active:scale-95"
                   >
                     {loading ? <Loader2 size={16} className="animate-spin" /> : <DownloadCloud size={16} />}
-                    Instal Pembaruan
+                    Instal Sekarang
                   </button>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
-export const APP_VERSION = '3.0.0'; // Versi Mayor Baru
+export const APP_VERSION = '3.0.5'; // Versi stabil dengan Turbo-Sync
 
 export const THEME_COLORS = {
   blue: { bg: 'bg-blue-100', text: 'text-blue-500', border: 'border-blue-200', light: 'bg-blue-50', hover: 'hover:bg-blue-200' },
