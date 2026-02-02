@@ -100,10 +100,12 @@ const App: React.FC = () => {
         cloudRegs = responseData;
       } else if (responseData.registrations) {
         cloudRegs = responseData.registrations;
-        latestVer = responseData.app_version;
+        latestVer = responseData.app_version || responseData.version;
       }
 
+      // Logic: Jika versi di cloud lebih tinggi dari versi aplikasi saat ini
       if (latestVer && latestVer !== APP_VERSION) {
+        console.log(`Pembaruan Sistem Tersedia: ${APP_VERSION} -> ${latestVer}`);
         setCloudVersion(latestVer);
         setUpdateAvailable(true);
       }
@@ -131,17 +133,24 @@ const App: React.FC = () => {
   useEffect(() => {
     if (dbSourceUrl) {
       syncWithCloud();
-      const intervalTime = activeTab === 'devPortal' ? 10000 : 180000;
+      const intervalTime = activeTab === 'devPortal' ? 10000 : 60000; // Cek tiap 1 menit jika sedang bekerja
       const interval = setInterval(() => syncWithCloud(), intervalTime);
       return () => clearInterval(interval);
     }
   }, [dbSourceUrl, syncWithCloud, activeTab]);
 
+  // Handler Update Versi Baru
   const handleUpdateApp = () => {
     setLoading(true);
+    // 1. Simpan sesi terakhir (opsional, sudah di localstorage)
+    if (user) localStorage.setItem('sf_session_user', JSON.stringify(user));
+    
+    // 2. Refresh halaman dengan cache-busting untuk memaksa browser mengambil deploy terbaru
     setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('v_update', Date.now().toString());
+      window.location.replace(currentUrl.toString());
+    }, 1500);
   };
 
   const handleRegistrationAction = useCallback(async (regId: string, status: 'approved' | 'rejected') => {
@@ -156,7 +165,7 @@ const App: React.FC = () => {
         params.append('id', regId);
         params.append('status', status);
 
-        fetch(`${dbSourceUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors' })
+        fetch(`${dbSourceUrl}?${params.toString()}`, { method: 'GET', mode: 'no-cors', keepalive: true })
           .then(() => {
             setTimeout(() => syncWithCloud(true), 2000);
           });
@@ -226,50 +235,42 @@ const App: React.FC = () => {
       status: 'pending'
     };
 
-    // 1. Simpan Lokal Instan (Backup utama)
     const current = JSON.parse(localStorage.getItem('sf_registrations_db') || '[]');
     const updated = [newReg, ...current];
     localStorage.setItem('sf_registrations_db', JSON.stringify(updated));
     setRegistrations(updated);
 
-    // 2. Direct-to-Sheet Logic (V2.9.8)
     if (dbSourceUrl && dbSourceUrl.includes('script.google.com')) {
-      try {
-        const queryParams = new URLSearchParams({
-          action: 'register',
-          id: newReg.id,
-          name: newReg.name,
-          email: newReg.email,
-          password: newReg.password || '',
-          timestamp: newReg.timestamp,
-          origin: window.location.origin
-        });
+      const queryParams = new URLSearchParams({
+        action: 'register',
+        id: newReg.id,
+        name: newReg.name,
+        email: newReg.email,
+        password: newReg.password || '',
+        timestamp: newReg.timestamp,
+        v: APP_VERSION
+      });
 
-        // Trik: Gunakan Image ping untuk bypass CORS sepenuhnya jika fetch gagal
-        const targetUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}${queryParams.toString()}`;
-        
-        // Coba fetch mode no-cors dulu
-        fetch(targetUrl, { 
-          method: 'GET', 
-          mode: 'no-cors',
-          cache: 'no-cache'
-        }).then(() => {
-           console.log("Direct write success signal sent.");
-        });
+      const targetUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?'}${queryParams.toString()}`;
+      
+      fetch(targetUrl, { 
+        method: 'GET', 
+        mode: 'no-cors',
+        keepalive: true,
+        cache: 'no-cache'
+      });
 
-        // Backup Ping menggunakan Image object (teknik pixel tracking yang sangat handal)
-        const img = new Image();
-        img.src = targetUrl + "&ping=img";
-        
-      } catch (err) {
-        console.warn("Cloud Write Attempted with warning:", err);
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(targetUrl + "&m=beacon");
       }
     }
 
-    setLoading(false);
-    alert(`PENDAFTARAN TERKIRIM!\n\nData ${newReg.name} telah dicatat di database Cloud Socialflow. Silakan hubungi Developer untuk persetujuan akun.`);
-    setAuthState('login');
-    setRegName(''); setRegEmail(''); setRegPassword('');
+    setTimeout(() => {
+      setLoading(false);
+      alert(`PENDAFTARAN BERHASIL!\n\nNama: ${newReg.name}\nEmail: ${newReg.email}\n\nData Anda telah dikirim ke database Cloud Socialflow.`);
+      setAuthState('login');
+      setRegName(''); setRegEmail(''); setRegPassword('');
+    }, 300);
   };
 
   const handleLogout = () => {
@@ -399,24 +400,34 @@ const App: React.FC = () => {
             user={user} 
             appLogo={customLogo}
           />
-          <main className="flex-1 ml-72 p-10 min-h-screen overflow-x-hidden">
+          <main className="flex-1 ml-72 p-10 min-h-screen overflow-x-hidden relative">
+            {/* Banner Update Modern */}
             {updateAvailable && (
-              <div className="mb-8 p-4 bg-gradient-to-r from-blue-600 to-blue-400 text-white rounded-[2rem] shadow-xl flex items-center justify-between animate-slide border-4 border-white ring-1 ring-blue-100">
-                <div className="flex items-center gap-4 pl-4">
-                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center animate-bounce">
-                    <Sparkles size={20} />
+              <div className="mb-10 p-6 bg-white border-2 border-blue-400 rounded-[2.5rem] shadow-[0_20px_50px_rgba(59,130,246,0.15)] flex flex-col md:flex-row items-center justify-between animate-slide gap-6 ring-8 ring-blue-50/50">
+                <div className="flex items-center gap-5">
+                  <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-400 text-white rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+                    <Sparkles size={24} />
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-80">Update Terdeteksi</p>
-                    <p className="text-sm font-black">Versi {cloudVersion} sudah tersedia. Silakan perbarui untuk fitur terbaru.</p>
+                    <div className="flex items-center gap-2 mb-1">
+                       <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-[8px] font-black uppercase rounded-md tracking-widest">New Deployment</span>
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">System Update Available</p>
+                    </div>
+                    <p className="text-lg font-black text-gray-900">Versi {cloudVersion} Telah Dirilis!</p>
+                    <p className="text-xs text-gray-400 font-medium">Klik perbarui untuk mendapatkan fitur dan perbaikan terbaru dari sistem Snaillabs.</p>
                   </div>
                 </div>
-                <button 
-                  onClick={handleUpdateApp}
-                  className="mr-2 px-6 py-3 bg-white text-blue-600 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg flex items-center gap-2 hover:scale-105 transition-all active:scale-95"
-                >
-                  <DownloadCloud size={16} /> Perbarui Sekarang
-                </button>
+                <div className="flex items-center gap-3">
+                  <button onClick={() => setUpdateAvailable(false)} className="px-6 py-4 text-gray-400 text-[10px] font-black uppercase hover:text-gray-600 transition-colors">Nanti saja</button>
+                  <button 
+                    onClick={handleUpdateApp}
+                    disabled={loading}
+                    className="px-10 py-4 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/30 flex items-center gap-2 hover:scale-105 transition-all active:scale-95"
+                  >
+                    {loading ? <Loader2 size={16} className="animate-spin" /> : <DownloadCloud size={16} />}
+                    Instal Pembaruan
+                  </button>
+                </div>
               </div>
             )}
 

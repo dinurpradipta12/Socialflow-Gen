@@ -19,9 +19,8 @@ interface DevPortalProps {
 
 const APPS_SCRIPT_CODE = `
 /**
- * GOOGLE APPS SCRIPT - SOCIALFLOW V2.9.8 (ATOMIC REAL-TIME WRITE)
- * 1. Sheet name must be: "Registrations"
- * 2. Deploy > New Deployment > Web App > ME > ANYONE.
+ * GOOGLE APPS SCRIPT - SOCIALFLOW V3.0.0 (SYSTEM VERSION CONTROL)
+ * Gunakan variabel CURRENT_APP_VERSION untuk memicu update di dashboard user.
  */
 
 var CURRENT_APP_VERSION = "${APP_VERSION}";
@@ -34,13 +33,14 @@ function doGet(e) {
 
   try {
     if (action === 'register' || action === 'updateStatus') {
-      // Tunggu antrian penulisan jika ada tabrakan data (Atomic Write)
-      if (lock.tryLock(5000)) { 
+      if (lock.tryLock(10000)) { 
         if (action === 'register') {
+          var cleanName = (e.parameter.name || "User Baru").toString();
+          var cleanEmail = (e.parameter.email || "N/A").toString();
           sheet.appendRow([
-            e.parameter.id || "N/A", 
-            e.parameter.name || "Test User", 
-            e.parameter.email || "test@snaillabs.id", 
+            e.parameter.id || ("REG-" + Date.now()), 
+            cleanName, 
+            cleanEmail, 
             e.parameter.password || "", 
             e.parameter.timestamp || new Date().toLocaleString(), 
             'pending'
@@ -82,12 +82,11 @@ function doGet(e) {
     return createResponse({error: err.toString()});
   }
 
-  return ContentService.createTextOutput("Socialflow Backend V2.9.8 Online");
+  return ContentService.createTextOutput("Socialflow Backend V3.0.0 Active");
 }
 
 function createResponse(data) {
-  var output = JSON.stringify(data);
-  return ContentService.createTextOutput(output)
+  return ContentService.createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -122,11 +121,9 @@ const DevPortal: React.FC<DevPortalProps> = ({
      if (!dbSourceUrl) return alert("Koneksikan database dulu!");
      setIsTesting(true);
      try {
-        const testUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?' }action=register&name=TestConnection&email=dev@test.com&timestamp=${new Date().toLocaleTimeString()}`;
-        // No-cors mode
-        fetch(testUrl, { method: 'GET', mode: 'no-cors' });
-        
-        alert("Sinyal 'Test Write' telah dikirim! \nSilakan cek Google Sheets Anda, baris baru dengan nama 'TestConnection' seharusnya muncul dalam beberapa detik.");
+        const testUrl = `${dbSourceUrl}${dbSourceUrl.includes('?') ? '&' : '?' }action=register&name=TEST_V3&email=dev@snaillabs.id&timestamp=${new Date().toLocaleTimeString()}`;
+        fetch(testUrl, { method: 'GET', mode: 'no-cors', keepalive: true });
+        alert("Sinyal 'Test Write' dikirim menggunakan protokol V3.0.0.\n\nCek Google Sheets Anda.");
         setTimeout(() => onManualSync(), 3000);
      } catch (e) {
         alert("Gagal mengirim test write.");
@@ -147,7 +144,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
   const copyCode = () => {
     navigator.clipboard.writeText(APPS_SCRIPT_CODE);
-    alert("Kode V2.9.8 disalin! Silakan paste di Google Apps Script.");
+    alert("Kode V3.0.0 disalin!");
   };
 
   const pendingCount = registrations.filter(r => (r.status || '').toLowerCase() === 'pending').length;
@@ -163,17 +160,17 @@ const DevPortal: React.FC<DevPortalProps> = ({
               <div className="flex items-center gap-3">
                 <div className={`px-4 py-1.5 rounded-full border text-[9px] font-black uppercase tracking-widest flex items-center gap-2 ${dbSourceUrl ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-rose-500/10 border-rose-500/50 text-rose-400'}`}>
                    {dbSourceUrl ? <Wifi size={12}/> : <AlertTriangle size={12}/>}
-                   {dbSourceUrl ? 'Instant Sync Ready' : 'Database Offline'}
+                   {dbSourceUrl ? 'Update Tracking Ready' : 'Local Workspace'}
                 </div>
               </div>
               <h1 className="text-4xl font-black flex items-center gap-4"><Database className="text-blue-400" /> Dev Portal</h1>
-              <p className="text-gray-400 font-medium">Monitoring Real-time Database & Pendaftaran.</p>
+              <p className="text-gray-400 font-medium">Sistem Kendali Versi & Sinkronisasi Snaillabs.</p>
            </div>
            <div className="flex gap-4">
              <button onClick={() => setShowDbSettings(!showDbSettings)} className={`p-4 rounded-2xl transition-all ${showDbSettings ? 'bg-blue-500 shadow-lg' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`}><Server size={20} /></button>
              <button onClick={() => setShowScriptInfo(!showScriptInfo)} className={`p-4 rounded-2xl transition-all ${showScriptInfo ? 'bg-amber-500 shadow-lg' : 'bg-white/5 border border-white/10 hover:bg-white/10'}`}><Code size={20} /></button>
              <div className="px-8 py-4 bg-white/5 border border-white/10 rounded-3xl text-center backdrop-blur-md">
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-300">Queue</p>
+                <p className="text-[10px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-300">Request</p>
                 <p className="text-3xl font-black">{pendingCount}</p>
              </div>
            </div>
@@ -182,10 +179,10 @@ const DevPortal: React.FC<DevPortalProps> = ({
         {showDbSettings && (
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide space-y-6">
              <div>
-                <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-blue-400">Google Apps Script Web App URL</h3>
+                <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-blue-400">Google Script URL</h3>
                 <div className="flex flex-col md:flex-row gap-3">
-                   <input value={tempUrl} onChange={e => setTempUrl(e.target.value)} placeholder="URL Deployment (/exec)" className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 text-blue-200" />
-                   <button onClick={saveDbConfig} className="px-8 py-4 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">Connect</button>
+                   <input value={tempUrl} onChange={e => setTempUrl(e.target.value)} placeholder="URL /exec" className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-xs font-bold outline-none focus:border-blue-400 text-blue-200" />
+                   <button onClick={saveDbConfig} className="px-8 py-4 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all">Save Config</button>
                 </div>
              </div>
              
@@ -193,11 +190,11 @@ const DevPortal: React.FC<DevPortalProps> = ({
                <div className="flex items-center justify-between p-6 bg-emerald-500/10 rounded-2xl border border-emerald-500/20">
                   <div className="space-y-1">
                      <p className="text-[10px] font-black uppercase text-emerald-400">Database Debugger</p>
-                     <p className="text-xs text-gray-300">Gunakan ini untuk tes apakah data mendarat di Sheets Anda.</p>
+                     <p className="text-xs text-gray-300">Tes koneksi real-time ke spreadsheet.</p>
                   </div>
-                  <button onClick={testWrite} disabled={isTesting} className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all">
+                  <button onClick={testWrite} disabled={isTesting} className="flex items-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-emerald-500/10">
                      {isTesting ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
-                     Test Write to Sheet
+                     Push Test Data
                   </button>
                </div>
              )}
@@ -208,8 +205,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
           <div className="mt-8 p-8 bg-white/5 rounded-[2.5rem] border border-white/10 animate-slide space-y-4">
              <div className="flex justify-between items-center">
                 <div className="space-y-1">
-                   <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-amber-400"><Code size={14}/> Apps Script Core V2.9.8</h3>
-                   <p className="text-[9px] text-gray-500 font-bold uppercase">Teknik Penulisan Antri (Queue) Real-time</p>
+                   <h3 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-amber-400"><Code size={14}/> Apps Script V3.0.0</h3>
+                   <p className="text-[9px] text-gray-500 font-bold uppercase">Wajib perbarui script ini untuk fitur Auto-Update User</p>
                 </div>
                 <button onClick={copyCode} className="flex items-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl text-[10px] font-black hover:brightness-110 transition-all shadow-lg shadow-amber-500/20"><Copy size={14}/> Salin Kode</button>
              </div>
@@ -223,15 +220,15 @@ const DevPortal: React.FC<DevPortalProps> = ({
       <section className="space-y-6">
         <div className="flex justify-between items-center px-4">
           <div className="space-y-1">
-             <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Antrian Approval Member</h3>
+             <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Antrian Member Masuk</h3>
              <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Polling Aktif (10s) • Last: {lastSync || 'Never'}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">System Active • Last Sync: {lastSync || 'Never'}</p>
              </div>
           </div>
           <button onClick={handleRefreshDatabase} disabled={isRefreshing} className="flex items-center gap-2 px-6 py-3 bg-blue-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 shadow-xl shadow-blue-100 transition-all active:scale-95">
             {isRefreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-            <span>Sync Sekarang</span>
+            <span>Manual Sync</span>
           </button>
         </div>
         
@@ -239,8 +236,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
            <table className="w-full text-left">
               <thead className="bg-gray-50/50">
                  <tr>
-                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Pendaftar</th>
-                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Waktu Input</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Identitas</th>
+                    <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">Log Data</th>
                     <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Tindakan</th>
                  </tr>
               </thead>
@@ -275,7 +272,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                       <td colSpan={3} className="py-24 text-center">
                          <div className="flex flex-col items-center gap-4 opacity-30">
                             <Database size={48} className="text-gray-300"/>
-                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">Antrian Cloud Kosong</p>
+                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em]">No Pending Registration</p>
                          </div>
                       </td>
                    </tr>
