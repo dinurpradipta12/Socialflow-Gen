@@ -19,8 +19,8 @@ interface DevPortalProps {
 const DevPortal: React.FC<DevPortalProps> = ({ 
   registrations, onRegistrationAction, onManualSync, users, setUsers
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'queue' | 'manual' | 'users'>('queue');
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  // Removed 'queue' from tabs, default is now 'manual'
+  const [activeSubTab, setActiveSubTab] = useState<'manual' | 'users'>('manual');
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<{[key: string]: 'idle' | 'sending' | 'sent' | 'error'}>({});
   
@@ -32,7 +32,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
     whatsapp: '',
     activationDate: new Date().toISOString().split('T')[0],
     expiryDate: '',
-    status: 'active' as 'active' | 'suspended'
+    // Removed status from local state, it will be hardcoded to 'pending' on creation
   });
 
   const generatePassword = () => {
@@ -75,13 +75,17 @@ const DevPortal: React.FC<DevPortalProps> = ({
     }
   };
 
-  const pendingRegs = registrations.filter(r => (r.status || '').toLowerCase() === 'pending');
-
   const handleManualRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualUser.email || !manualUser.expiryDate) {
       alert("Email dan Tanggal Berakhir wajib diisi.");
       return;
+    }
+
+    // Cek duplikasi email
+    if (users.some(u => u.email.toLowerCase() === manualUser.email.toLowerCase())) {
+        alert("Email ini sudah terdaftar dalam database!");
+        return;
     }
 
     setIsDispatching(true);
@@ -98,7 +102,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
       isSubscribed: true,
       activationDate: manualUser.activationDate,
       subscriptionExpiry: manualUser.expiryDate,
-      status: manualUser.status,
+      status: 'pending', // DEFAULT STATUS IS PENDING
       jobdesk: 'Manual Member',
       kpi: [],
       activityLogs: [],
@@ -113,15 +117,15 @@ const DevPortal: React.FC<DevPortalProps> = ({
     const emailSuccess = await dispatchCloudEmail(newUser);
 
     if (emailSuccess) {
-      alert(`User ${manualUser.name} diaktifkan & Kredensial TERKIRIM ke ${manualUser.email}.`);
+      alert(`User ${manualUser.name} dibuat (Pending) & Kredensial TERKIRIM ke ${manualUser.email}.`);
     } else {
-      alert(`User ${manualUser.name} diaktifkan, NAMUN email gagal terkirim (Mode Offline/Config Error).`);
+      alert(`User ${manualUser.name} dibuat (Pending), NAMUN email gagal terkirim.`);
     }
     
     setIsDispatching(false);
     setActiveSubTab('users');
     setManualUser({
-      name: '', email: '', password: '', whatsapp: '', activationDate: new Date().toISOString().split('T')[0], expiryDate: '', status: 'active'
+      name: '', email: '', password: '', whatsapp: '', activationDate: new Date().toISOString().split('T')[0], expiryDate: ''
     });
   };
 
@@ -139,12 +143,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
            
            <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-x-auto max-w-full">
               <button 
-                onClick={() => setActiveSubTab('queue')}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'queue' ? 'bg-blue-50 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-              >
-                 Registry Queue
-              </button>
-              <button 
                 onClick={() => setActiveSubTab('manual')}
                 className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'manual' ? 'bg-blue-50 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
               >
@@ -160,58 +158,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
         </div>
       </div>
 
-      {activeSubTab === 'queue' && (
-        <section className="space-y-6">
-          <div className="flex justify-between items-center px-6">
-             <div className="space-y-1">
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Cloud Registry Queue</h3>
-                <p className="text-[10px] text-gray-300 font-bold">Data disinkronkan dari semua node perangkat</p>
-             </div>
-             <button 
-                onClick={() => { setIsRefreshing(true); onManualSync(); setTimeout(() => setIsRefreshing(false), 1000); }}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl text-blue-500 hover:bg-blue-100 transition-all"
-             >
-                <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-                <span className="text-[10px] font-black uppercase tracking-widest">Refresh Cloud</span>
-             </button>
-          </div>
-          
-          <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-             <table className="w-full text-left">
-                <thead className="bg-gray-50/80 border-b border-gray-100">
-                   <tr>
-                      <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest">User Node</th>
-                      <th className="px-10 py-6 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Action Control</th>
-                   </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                   {pendingRegs.map(r => (
-                      <tr key={r.id} className="hover:bg-gray-50/50 transition-all">
-                         <td className="px-10 py-8">
-                            <div className="flex items-center gap-4">
-                               <div className="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center text-blue-500 font-black">{r.name.charAt(0)}</div>
-                               <div>
-                                  <p className="text-sm font-black text-gray-900">{r.name}</p>
-                                  <p className="text-[10px] text-gray-400 font-bold">{r.email}</p>
-                               </div>
-                            </div>
-                         </td>
-                         <td className="px-10 py-8">
-                            <div className="flex justify-center gap-2">
-                                <button onClick={() => onRegistrationAction(r.id, 'approved')} className="px-5 py-2.5 bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-emerald-100">Approve Access</button>
-                                <button onClick={() => onRegistrationAction(r.id, 'rejected')} className="px-5 py-2.5 bg-rose-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl shadow-rose-100">Reject</button>
-                            </div>
-                         </td>
-                      </tr>
-                   ))}
-                   {pendingRegs.length === 0 && (
-                     <tr><td colSpan={2} className="py-20 text-center text-gray-300 font-black uppercase text-xs tracking-[0.4em]">Queue Empty</td></tr>
-                   )}
-                </tbody>
-             </table>
-          </div>
-        </section>
-      )}
+      {/* Registry Queue removed entirely */}
 
       {activeSubTab === 'manual' && (
         <section className="max-w-4xl mx-auto animate-slide">
@@ -220,7 +167,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                  <div className="p-4 bg-blue-50 text-blue-500 rounded-3xl"><UserPlus size={32}/></div>
                  <div>
                     <h2 className="text-2xl font-black text-gray-900">Manual Provisioning</h2>
-                    <p className="text-sm text-gray-400 font-medium">Buat akses administrator/member secara instan.</p>
+                    <p className="text-sm text-gray-400 font-medium">Buat akses user baru. Status awal akan <b>Pending</b> hingga user login.</p>
                  </div>
               </div>
 
@@ -262,7 +209,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                  </div>
 
                  <button type="submit" disabled={isDispatching} className="w-full py-6 bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest rounded-3xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3">
-                    {isDispatching ? <><Loader2 size={18} className="animate-spin" /> Sending Email via API...</> : "Register & Send Credentials"}
+                    {isDispatching ? <><Loader2 size={18} className="animate-spin" /> Sending Email via API...</> : "Create User & Send Email"}
                  </button>
               </form>
            </div>
@@ -294,6 +241,22 @@ const DevPortal: React.FC<DevPortalProps> = ({
                     {users.map(u => {
                       const isExpired = u.subscriptionExpiry && new Date() > new Date(u.subscriptionExpiry);
                       const dStatus = dispatchStatus[u.id] || 'idle';
+                      const currentStatus = u.status || 'active';
+
+                      // Determine visual status
+                      let statusColor = 'bg-emerald-500';
+                      let statusText = 'active';
+                      
+                      if (isExpired) {
+                          statusColor = 'bg-rose-500';
+                          statusText = 'expired';
+                      } else if (currentStatus === 'pending') {
+                          statusColor = 'bg-amber-400';
+                          statusText = 'pending';
+                      } else if (currentStatus === 'suspended') {
+                          statusColor = 'bg-gray-400';
+                          statusText = 'suspended';
+                      }
 
                       return (
                        <tr key={u.id} className={`hover:bg-gray-50/50 transition-all group ${isExpired ? 'opacity-60' : ''}`}>
@@ -332,9 +295,9 @@ const DevPortal: React.FC<DevPortalProps> = ({
                           </td>
                           <td className="px-8 py-6">
                              <div className="flex items-center gap-2">
-                                <div className={`w-2 h-2 rounded-full ${isExpired ? 'bg-rose-500' : u.status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}></div>
+                                <div className={`w-2 h-2 rounded-full ${statusColor} ${currentStatus === 'active' ? 'animate-pulse' : ''}`}></div>
                                 <span className={`text-[9px] font-black uppercase tracking-widest ${isExpired ? 'text-rose-500' : 'text-gray-900'}`}>
-                                   {isExpired ? 'Expired' : u.status || 'Active'}
+                                   {statusText}
                                 </span>
                              </div>
                           </td>

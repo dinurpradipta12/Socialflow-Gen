@@ -33,7 +33,7 @@ export interface User {
   isSubscribed: boolean;
   activationDate?: string;
   subscriptionExpiry?: string;
-  status?: 'active' | 'suspended' | 'expired';
+  status?: 'active' | 'suspended' | 'expired' | 'pending'; // Added 'pending'
   jobdesk: string;
   kpi: string[];
   activityLogs: ActivityLog[];

@@ -91,35 +91,10 @@ const App: React.FC = () => {
   }, [fetchCloudData]);
 
   const handleRegistrationAction = async (regId: string, status: 'approved' | 'rejected') => {
+    // Legacy support for queue logic if needed, otherwise this is less used now
     setLoading(true);
     await cloudService.updateRegistrationStatus(regId, status);
-    
-    if (status === 'approved') {
-      const reg = registrations.find(r => r.id === regId);
-      if (reg) {
-        if (!allUsers.some(u => u.email === reg.email)) {
-          const newUser: User = {
-            id: `U-${Date.now()}`,
-            name: reg.name,
-            email: reg.email,
-            password: reg.password || 'Social123',
-            role: 'viewer',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
-            permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
-            isSubscribed: true,
-            subscriptionExpiry: '2025-12-31',
-            jobdesk: reg.niche || 'Member',
-            kpi: [],
-            activityLogs: [],
-            performanceScore: 0,
-            socialMedia: reg.handle,
-            requiresPasswordChange: true // WAJIB GANTI PASSWORD
-          };
-          setAllUsers(prev => [...prev, newUser]);
-          alert(`Akun ${reg.name} berhasil dibuat!`);
-        }
-      }
-    }
+    // ...existing logic for approval if queue was used...
     await fetchCloudData();
     setLoading(false);
   };
@@ -187,10 +162,11 @@ const App: React.FC = () => {
     }
 
     if (tempLoginUser) {
-      const updatedUser = {
+      const updatedUser: User = {
          ...tempLoginUser,
          password: newPassword,
-         requiresPasswordChange: false // Flag dinonaktifkan
+         requiresPasswordChange: false, // Flag dinonaktifkan
+         status: 'active' // OTOMATIS UBAH STATUS JADI ACTIVE
       };
 
       // Update Database
