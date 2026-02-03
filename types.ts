@@ -113,6 +113,7 @@ export interface ContentPlanItem {
   description: string;
   approvedBy?: string;
   accountId?: string; // Untuk multi-akun (e.g., 'account-1', 'account-2')
+  postDate?: string; // Tanggal posting
   comments?: Comment[];
 }
 
@@ -158,6 +159,7 @@ export interface SystemNotification {
   timestamp: string;
   read: boolean;
   type?: 'info' | 'warning' | 'success';
+  targetContentId?: string; // ID konten untuk deep linking
 }
 
 // New Types for Dashboard Analytics

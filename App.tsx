@@ -49,6 +49,9 @@ const App: React.FC = () => {
   const [notificationHistory, setNotificationHistory] = useState<SystemNotification[]>([]);
   const [showNotifHistory, setShowNotifHistory] = useState(false);
 
+  // Navigation State
+  const [targetContentId, setTargetContentId] = useState<string | null>(null);
+
   // Accounts State (Multi-Account Feature)
   const [accounts, setAccounts] = useState<SocialAccount[]>([
     { id: 'account-1', name: 'Akun Utama', instagramUsername: '@arunika', tiktokUsername: '@arunika.id' }
@@ -318,6 +321,15 @@ const App: React.FC = () => {
     setNotificationHistory(prev => prev.map(n => ({...n, read: true})));
   };
 
+  const handleOpenContent = (contentId?: string) => {
+    if (contentId) {
+        setTargetContentId(contentId);
+        setActiveTab('contentPlan');
+        setTopNotification(null);
+        setShowNotifHistory(false);
+    }
+  };
+
   const isDev = user?.role === 'developer';
   const activeWorkspace = MOCK_WORKSPACES[0];
 
@@ -535,7 +547,7 @@ const App: React.FC = () => {
           senderName={topNotification.senderName}
           messageText={topNotification.messageText}
           onClose={() => setTopNotification(null)}
-          onClick={() => { setTopNotification(null); setActiveTab('messages'); }}
+          onClick={() => handleOpenContent(topNotification.targetContentId)}
         />
       )}
 
@@ -550,6 +562,7 @@ const App: React.FC = () => {
         unreadNotifications={notificationHistory.filter(n => !n.read).length}
         notifications={notificationHistory}
         onMarkRead={markNotificationsRead}
+        onOpenContent={handleOpenContent}
       />
       
       <main className={`flex-1 transition-all duration-300 min-h-screen md:ml-72 p-6 md:p-12 relative`}>
@@ -569,6 +582,7 @@ const App: React.FC = () => {
                currentUser={user!}
                accounts={accounts}
                setAccounts={setAccounts}
+               targetContentId={targetContentId}
              />
            )}
            {activeTab === 'calendar' && !isDev && <Calendar primaryColor={activeWorkspace.color} />}

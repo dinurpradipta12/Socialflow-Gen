@@ -17,11 +17,12 @@ interface SidebarProps {
   unreadNotifications?: number;
   notifications?: SystemNotification[];
   onMarkRead?: () => void;
+  onOpenContent?: (contentId: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
   activeTab, setActiveTab, onLogout, user, appLogo, isOpen = false,
-  unreadNotifications = 0, notifications = [], onMarkRead
+  unreadNotifications = 0, notifications = [], onMarkRead, onOpenContent
 }) => {
   const [time, setTime] = useState(new Date());
   const [showNotifHistory, setShowNotifHistory] = useState(false);
@@ -47,6 +48,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', label: 'Pengaturan', icon: Settings },
   ];
 
+  const handleNotificationClick = (n: SystemNotification) => {
+      if (n.targetContentId && onOpenContent) {
+          onOpenContent(n.targetContentId);
+      }
+  };
+
   return (
     <div className={`fixed inset-y-0 left-0 w-72 bg-white border-r border-gray-100 flex flex-col z-[100] transition-transform duration-300 ease-in-out transform ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} shadow-2xl md:shadow-none`}>
       <div className="p-6 flex flex-col h-full relative">
@@ -60,7 +67,11 @@ const Sidebar: React.FC<SidebarProps> = ({
              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
                 {notifications.length === 0 && <p className="text-center text-xs text-gray-300 py-4">Belum ada notifikasi.</p>}
                 {notifications.map((n) => (
-                   <div key={n.id} className="p-3 bg-gray-50 rounded-xl border border-gray-50 hover:bg-blue-50 transition-colors">
+                   <div 
+                     key={n.id} 
+                     onClick={() => handleNotificationClick(n)}
+                     className="p-3 bg-gray-50 rounded-xl border border-gray-50 hover:bg-blue-50 transition-colors cursor-pointer"
+                   >
                       <p className="text-[10px] font-black text-gray-900 mb-1">{n.senderName}</p>
                       <p className="text-xs text-gray-500 leading-tight">{n.messageText}</p>
                       <p className="text-[9px] text-gray-300 mt-2 text-right">{new Date(n.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
