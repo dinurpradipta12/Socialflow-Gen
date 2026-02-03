@@ -32,8 +32,8 @@ const FULL_PERMISSIONS: Permissions = {
 };
 
 export const DEV_CREDENTIALS = {
-  email: 'cs.arunika@gmail.com',
-  password: 'Dinur@12345'
+  email: 'admin@arunika.com',
+  password: '123456'
 };
 
 export const MOCK_USERS: User[] = [
@@ -57,8 +57,8 @@ export const MOCK_USERS: User[] = [
   { 
     id: 'dev-1', 
     name: 'Arunika Dev', 
-    email: DEV_CREDENTIALS.email, 
-    password: DEV_CREDENTIALS.password,
+    email: 'cs.arunika@gmail.com', 
+    password: 'Dinur@12345',
     role: 'developer', 
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=dev',
     permissions: FULL_PERMISSIONS,
@@ -66,6 +66,21 @@ export const MOCK_USERS: User[] = [
     subscriptionExpiry: '2030-01-01',
     jobdesk: 'System Architecture',
     kpi: ['100% Uptime'],
+    activityLogs: [],
+    performanceScore: 100
+  },
+  { 
+    id: 'dev-2', 
+    name: 'Super Admin', 
+    email: 'admin@arunika.com', 
+    password: '123456',
+    role: 'developer', 
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=SuperAdmin',
+    permissions: FULL_PERMISSIONS,
+    isSubscribed: true,
+    subscriptionExpiry: '2030-12-31',
+    jobdesk: 'Full Stack Access',
+    kpi: [],
     activityLogs: [],
     performanceScore: 100
   }
