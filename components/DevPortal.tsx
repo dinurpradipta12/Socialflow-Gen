@@ -51,20 +51,40 @@ const DevPortal: React.FC<DevPortalProps> = ({
     localStorage.setItem('sf_db_key', dbConfig.key);
   }, [dbConfig]);
 
-  // Initial Connection Check
+  // Initial Connection Check & Auto Fetch Users
   useEffect(() => {
-    if (dbConfig.url && dbConfig.key) {
-        checkDbConnection();
-    } else {
-        setDbStatus('offline');
-    }
-  }, []);
+    const initData = async () => {
+        if (dbConfig.url && dbConfig.key) {
+            setDbStatus('checking');
+            try {
+                // Auto Fetch Users Immediately on Mount
+                const dbUsers = await databaseService.getAllUsers(dbConfig);
+                setDbStatus('online');
+                // Always update displayed users if data is retrieved
+                setDisplayedUsers(dbUsers);
+                setUsers(dbUsers); // Sync to App global state too
+            } catch (e) {
+                setDbStatus('offline');
+                console.error("DB Auto-Connect Failed", e);
+            }
+        } else {
+            setDbStatus('offline');
+        }
+    };
+    initData();
+  }, []); // Run once on mount
 
   // Sync displayed users with prop users when on other tabs, 
   // but if on 'users' tab and connected, we might want to show DB users (handled in checkDbConnection/Refresh)
   useEffect(() => {
     if (activeSubTab !== 'users') {
         setDisplayedUsers(users);
+    } else if (dbStatus === 'online') {
+        // If switching to users tab and online, refresh data quietly
+        databaseService.getAllUsers(dbConfig).then(u => {
+            setDisplayedUsers(u);
+            setUsers(u);
+        }).catch(console.error);
     }
   }, [users, activeSubTab]);
 
@@ -74,10 +94,8 @@ const DevPortal: React.FC<DevPortalProps> = ({
         // Try fetching users as a ping
         const dbUsers = await databaseService.getAllUsers(dbConfig);
         setDbStatus('online');
-        // If we are active on Users tab, update the view with Real Data
-        if (activeSubTab === 'users') {
-            setDisplayedUsers(dbUsers);
-        }
+        setDisplayedUsers(dbUsers);
+        setUsers(dbUsers);
     } catch (e) {
         setDbStatus('offline');
         console.error("DB Connection Check Failed", e);
@@ -90,6 +108,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
     try {
         const dbUsers = await databaseService.getAllUsers(dbConfig);
         setDisplayedUsers(dbUsers);
+        setUsers(dbUsers);
         setDbStatus('online');
         alert("Database Refreshed! Data terbaru berhasil dimuat.");
     } catch (e) {
@@ -163,11 +182,13 @@ const DevPortal: React.FC<DevPortalProps> = ({
       }
 
       let importedCount = 0;
-      const newUsers = [...users];
+      // We should use the latest displayedUsers or users state to check for duplicates
+      const currentEmails = new Set(displayedUsers.map(u => u.email.toLowerCase()));
+      const newUsers = [];
 
       for (const reg of approvedRegs) {
         // Cek duplikasi
-        if (newUsers.some(u => u.email === reg.email)) continue;
+        if (currentEmails.has(reg.email.toLowerCase())) continue;
 
         const defaultExpiry = new Date();
         defaultExpiry.setMonth(defaultExpiry.getMonth() + 1);
@@ -198,9 +219,15 @@ const DevPortal: React.FC<DevPortalProps> = ({
         // Auto Sync User back to Users Table (to confirm existence in App)
         await databaseService.upsertUser(dbConfig, newUser);
       }
-
-      setUsers(newUsers);
-      alert(`Berhasil mengimpor ${importedCount} user baru dari Database Registrasi.`);
+      
+      if (newUsers.length > 0) {
+          const updatedList = [...displayedUsers, ...newUsers];
+          setDisplayedUsers(updatedList);
+          setUsers(updatedList);
+          alert(`Berhasil mengimpor ${importedCount} user baru dari Database Registrasi.`);
+      } else {
+          alert("Semua user approved sudah ada di database aplikasi.");
+      }
 
     } catch (e) {
       console.error(e);
@@ -244,7 +271,9 @@ const DevPortal: React.FC<DevPortalProps> = ({
       requiresPasswordChange: true
     };
 
-    setUsers([...users, newUser]);
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    setDisplayedUsers(updatedUsers);
 
     if (dbConfig.url && dbConfig.key) {
       await syncToDatabase(newUser);
@@ -343,7 +372,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                  Manual Provision
               </button>
               <button 
-                onClick={() => { setActiveSubTab('users'); if(dbStatus==='online') checkDbConnection(); }}
+                onClick={() => { setActiveSubTab('users'); }}
                 className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
               >
                  Active Users DB

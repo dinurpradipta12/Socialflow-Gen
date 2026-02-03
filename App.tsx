@@ -60,7 +60,8 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Helper untuk mendapatkan config database (Prioritas: LocalStorage -> Default Constant)
+  // Helper untuk mendapatkan config database
+  // SELALU gunakan SUPABASE_CONFIG jika localStorage kosong
   const getDbConfig = () => {
     return {
       url: localStorage.getItem('sf_db_url') || SUPABASE_CONFIG.url,
@@ -144,7 +145,7 @@ const App: React.FC = () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    // Developer Login Bypass
+    // 1. Developer Login Bypass (Hardcoded)
     if (cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password) {
         const devUser = MOCK_USERS.find(u => u.role === 'developer');
         if (devUser) {
@@ -156,78 +157,93 @@ const App: React.FC = () => {
         return;
     }
 
-    // 1. Siapkan User Variable
-    let targetUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
-    
-    // 2. SELALU Cek Database Cloud (Menggunakan Default Config)
+    // 2. REAL-TIME DB CHECK (Primary Auth Method)
+    // Kita tidak mengandalkan local storage untuk validasi password agar selalu sinkron.
     const dbConfig = getDbConfig();
+    let remoteUser: User | null = null;
+    let authSuccessful = false;
 
     if (dbConfig.url && dbConfig.key) {
         try {
-            const remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
+            console.log("Attempting login via Supabase...");
+            remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
             
             if (remoteUser) {
-                // Jika user ditemukan di cloud, kita prioritaskan data cloud (terutama Password & Status)
-                if (targetUser) {
-                    // Update user lokal dengan data terbaru dari cloud
-                    targetUser = { ...targetUser, ...remoteUser };
-                    
-                    // Update state global agar data lokal tersinkronisasi
-                    setAllUsers(prev => prev.map(u => u.email === cleanEmail ? targetUser! : u));
+                console.log("User found in DB:", remoteUser.name);
+                // Validasi Password dari DB
+                const dbPassword = remoteUser.password || 'Social123';
+                if (dbPassword === cleanPassword) {
+                    authSuccessful = true;
                 } else {
-                    // Jika user baru login pertama kali di device ini
-                    targetUser = remoteUser;
-                    setAllUsers(prev => [...prev, remoteUser]);
+                    setLoginError("Security Code (Password) salah.");
+                    setLoading(false);
+                    return;
                 }
+            } else {
+                 // User tidak ditemukan di DB Supabase
+                 // Fallback ke Local Storage (Hanya jika benar-benar offline/legacy)
             }
         } catch (err) {
-            console.error("Gagal sinkronisasi user cloud:", err);
-            // Lanjut menggunakan data local storage jika ada
+            console.error("DB Login Error:", err);
+            // Jika koneksi error, kita coba fallback ke local storage di bawah
         }
     }
 
-    // 3. Validasi Password
-    setTimeout(() => {
-        if (!targetUser) {
-            setLoginError("Email belum terdaftar dalam sistem.");
+    // 3. Finalize Login
+    if (authSuccessful && remoteUser) {
+        // Update Local Storage dengan data terbaru dari Cloud
+        const updatedAllUsers = [...allUsers];
+        const index = updatedAllUsers.findIndex(u => u.email === remoteUser!.email);
+        if (index !== -1) {
+            updatedAllUsers[index] = remoteUser;
+        } else {
+            updatedAllUsers.push(remoteUser);
+        }
+        setAllUsers(updatedAllUsers);
+
+        // Check Account Status
+        if (remoteUser.status === 'suspended') {
+            setLoginError("Akun ini telah ditangguhkan. Hubungi Admin.");
             setLoading(false);
             return;
         }
 
-        // Logic cek password: 
-        // 1. Cek match persis
-        // 2. Jika password di DB kosong/null, gunakan default 'Social123'
-        const dbPassword = targetUser.password || 'Social123';
-        const isPasswordCorrect = dbPassword === cleanPassword;
+        // Check Password Change Requirement
+        if (remoteUser.requiresPasswordChange) {
+            setTempLoginUser(remoteUser);
+            setIsChangePasswordOpen(true);
+            setLoading(false);
+            return;
+        }
 
-        if (isPasswordCorrect) {
-            // Cek Status Akun
-            if (targetUser.status === 'suspended') {
-                 setLoginError("Akun ini telah ditangguhkan. Hubungi Admin.");
-                 setLoading(false);
-                 return;
-            }
-
-            if (targetUser.requiresPasswordChange) {
-                setTempLoginUser(targetUser);
-                setIsChangePasswordOpen(true);
-            } else {
-                setUser(targetUser);
-                localStorage.setItem('sf_session_user', JSON.stringify(targetUser));
-                
-                // Cek Subscription
-                const today = new Date();
-                if (targetUser.subscriptionExpiry && today > new Date(targetUser.subscriptionExpiry) && targetUser.role !== 'developer') {
-                    setAuthState('expired');
-                } else {
-                    setAuthState('authenticated');
-                }
-            }
+        // Success Login
+        setUser(remoteUser);
+        localStorage.setItem('sf_session_user', JSON.stringify(remoteUser));
+        
+        // Cek Subscription
+        const today = new Date();
+        if (remoteUser.subscriptionExpiry && today > new Date(remoteUser.subscriptionExpiry) && remoteUser.role !== 'developer') {
+            setAuthState('expired');
         } else {
-            setLoginError("Security Code (Password) salah.");
+            setAuthState('authenticated');
         }
         setLoading(false);
-    }, 800);
+        return;
+    }
+
+    // 4. Fallback Local Storage (Jika DB Check gagal koneksi atau user belum ada di DB)
+    // Ini hanya jalan jika logic di atas tidak return.
+    const localUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail);
+    if (localUser && localUser.password === cleanPassword) {
+        // Local match found
+        setUser(localUser);
+        localStorage.setItem('sf_session_user', JSON.stringify(localUser));
+        setAuthState('authenticated');
+    } else if (!loginError) {
+        setLoginError("Email tidak terdaftar atau password salah.");
+    }
+    
+    setLoading(false);
   };
 
   const handleFinalizePasswordChange = (e: React.FormEvent) => {
@@ -281,7 +297,6 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 font-sans">
         <div className="max-w-md w-full bg-white rounded-[3rem] shadow-2xl p-10 space-y-8 border border-gray-100 animate-slide">
-           {/* ... existing password change UI ... */}
            <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-blue-100">
                  <Lock size={32} />
@@ -315,7 +330,6 @@ const App: React.FC = () => {
      return (
         <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 font-sans">
            <div className="max-w-md w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center space-y-8 border border-rose-50 animate-slide">
-              {/* ... existing expired UI ... */}
               <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-xl shadow-rose-100 animate-pulse">
                  <Lock size={48} />
               </div>
