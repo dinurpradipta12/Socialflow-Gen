@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, ThemeColor, Permissions, SystemNotification, Workspace } from '../types';
 import { THEME_COLORS } from '../constants';
-import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Trash2, Key, Target, CheckSquare, Plus, Copy, Link as LinkIcon, LogIn } from 'lucide-react';
+import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Trash2, Key, Target, CheckSquare, Plus, Copy, Link as LinkIcon, LogIn, Hash } from 'lucide-react';
 
 interface TeamProps {
   primaryColor: ThemeColor;
@@ -32,10 +32,7 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
     if (confirm("Hapus member ini secara permanen dari Workspace?")) {
       const updatedMembers = workspace.members.filter(m => m.id !== userId);
       setWorkspace({ ...workspace, members: updatedMembers });
-      // Hapus workspaceId dari user di database global (or rather, remove the user profile completely from this workspace context)
-      // Since our model creates new profile objects, we can just remove them from the member list.
-      // But to be consistent with global state:
-      // setUsers(allUsers.filter(u => u.id !== userId)); // This deletes the profile
+      // Note: In real app, also remove from global users or update their workspaceId
     }
   };
 
@@ -74,10 +71,10 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
     });
   };
 
-  const copyInviteLink = () => {
-      const link = `${window.location.origin}/?join=${workspace.inviteCode}`;
-      navigator.clipboard.writeText(link);
-      alert(`Link Invite berhasil disalin:\n${link}`);
+  const copyInviteCode = () => {
+      const code = workspace.inviteCode;
+      navigator.clipboard.writeText(code);
+      alert(`Kode Workspace berhasil disalin:\n${code}`);
   };
 
   return (
@@ -96,11 +93,11 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
               <span>Join Other WS</span>
             </button>
             <button 
-              onClick={copyInviteLink}
+              onClick={copyInviteCode}
               className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-blue-600"
             >
-              <LinkIcon size={16} />
-              <span>Copy Invite</span>
+              <Hash size={16} />
+              <span>Copy Code: {workspace.inviteCode}</span>
             </button>
             {isOwner && (
                 <button 

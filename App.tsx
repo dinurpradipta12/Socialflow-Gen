@@ -17,7 +17,7 @@ import ChatPopup from './components/ChatPopup';
 import TopNotification from './components/TopNotification';
 import { cloudService } from './services/cloudService';
 import { databaseService } from './services/databaseService';
-import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle, UserPlus, ChevronLeft, Building2, Link, LogIn } from 'lucide-react';
+import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle, UserPlus, ChevronLeft, Building2, Link, LogIn, Hash } from 'lucide-react';
 
 const cloudSyncChannel = new BroadcastChannel('sf_cloud_sync');
 
@@ -48,20 +48,18 @@ const App: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Invite Logic State
-  const [pendingInviteCode, setPendingInviteCode] = useState<string | null>(null);
-  const [joinWorkspaceUrl, setJoinWorkspaceUrl] = useState(''); // For manual paste
   const [isJoinWorkspaceModalOpen, setIsJoinWorkspaceModalOpen] = useState(false); // Logged in user joining new WS
+  const [workspaceCodeInput, setWorkspaceCodeInput] = useState('');
 
-  // Registration Specific State
-  const [regStep, setRegStep] = useState<'type_selection' | 'details' | 'workspace_setup'>('type_selection');
+  // Registration Form State (Simple)
   const [regData, setRegData] = useState({ 
-      name: '', email: '', password: '', whatsapp: '', reason: '', 
-      workspaceChoice: 'join' as 'join' | 'create',
-      inviteCode: '', // For joining
-      workspaceName: '', // For creating
-      workspaceColor: 'blue' as ThemeColor
+      name: '', email: '', password: '', whatsapp: '', reason: ''
   });
   const [regSuccess, setRegSuccess] = useState(false);
+
+  // Workspace Setup State (Post-Login)
+  const [setupStep, setSetupStep] = useState<'choice' | 'create' | 'join'>('choice');
+  const [newWorkspaceData, setNewWorkspaceData] = useState({ name: '', color: 'blue' as ThemeColor });
 
   // Global Settings State
   const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
@@ -96,27 +94,13 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // --- INITIALIZATION ---
-
-  // Check URL for Invite Code
-  useEffect(() => {
-      const params = new URLSearchParams(window.location.search);
-      const inviteCode = params.get('join');
-      if (inviteCode) {
-          setPendingInviteCode(inviteCode);
-          setRegData(prev => ({ ...prev, inviteCode: inviteCode, workspaceChoice: 'join' }));
-          
-          // If not logged in, go to register immediately
-          if (authState === 'login') {
-              setAuthState('register');
-              setRegStep('details'); // Skip selection, go to details
-          } else if (authState === 'authenticated') {
-              // If logged in, open join modal
-              setJoinWorkspaceUrl(`${window.location.origin}?join=${inviteCode}`);
-              setIsJoinWorkspaceModalOpen(true);
-          }
-      }
-  }, [authState]);
+  // Helper untuk mendapatkan config database
+  const getDbConfig = () => {
+    return {
+      url: localStorage.getItem('sf_db_url') || SUPABASE_CONFIG.url,
+      key: localStorage.getItem('sf_db_key') || SUPABASE_CONFIG.key
+    };
+  };
 
   // Persistence
   useEffect(() => {
@@ -133,7 +117,7 @@ const App: React.FC = () => {
   }, [workspaces]);
 
   // Helper: Get Active Workspace based on current user
-  const activeWorkspace = workspaces.find(w => w.id === user?.workspaceId) || workspaces[0];
+  const activeWorkspace = workspaces.find(w => w.id === user?.workspaceId);
 
   // Helper: Switch Profile
   const switchProfile = (targetUser: User) => {
@@ -147,113 +131,110 @@ const App: React.FC = () => {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
-    // VALIDATION
-    if (regData.workspaceChoice === 'join') {
-        const targetWs = workspaces.find(w => w.inviteCode === regData.inviteCode);
-        if (!targetWs) {
-            setLoginError("Link Workspace tidak valid atau kadaluarsa.");
-            setLoading(false);
-            return;
-        }
+    setLoginError(null);
+
+    const dbConfig = getDbConfig();
+
+    if (!dbConfig.url || !dbConfig.key) {
+        setLoginError("Konfigurasi Database Error. Hubungi Developer.");
+        setLoading(false);
+        return;
     }
 
     try {
-        // Create User Object
-        const newUser: User = {
-            id: `U-${Date.now()}`,
-            name: regData.name,
-            email: regData.email,
-            password: regData.password,
-            whatsapp: regData.whatsapp,
-            role: regData.workspaceChoice === 'create' ? 'superuser' : 'viewer',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${regData.name}`,
-            permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: regData.workspaceChoice === 'create', contentPlan: true },
-            isSubscribed: true,
-            activationDate: new Date().toISOString(),
-            status: 'active',
-            jobdesk: regData.workspaceChoice === 'create' ? 'Owner' : 'Member',
-            kpi: [],
-            activityLogs: [],
-            performanceScore: 0,
-            workspaceId: '', // Will be set below
-            requiresPasswordChange: false
-        };
-
-        if (regData.workspaceChoice === 'create') {
-            // Create New Workspace
-            const newWsId = `WS-${Date.now()}`;
-            const newInviteCode = `JOIN-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-            const newWs: Workspace = {
-                id: newWsId,
-                name: regData.workspaceName || `${regData.name}'s Studio`,
-                color: regData.workspaceColor,
-                inviteCode: newInviteCode,
-                ownerId: newUser.id,
-                members: [newUser]
-            };
-            
-            newUser.workspaceId = newWsId;
-            
-            setWorkspaces([...workspaces, newWs]);
-            setAllUsers([...allUsers, newUser]);
-        } else {
-            // Join Existing
-            const targetWs = workspaces.find(w => w.inviteCode === regData.inviteCode);
-            if (targetWs) {
-                newUser.workspaceId = targetWs.id;
-                // Add to workspace members
-                const updatedWs = { ...targetWs, members: [...targetWs.members, newUser] };
-                setWorkspaces(workspaces.map(w => w.id === targetWs.id ? updatedWs : w));
-                setAllUsers([...allUsers, newUser]);
-            }
-        }
-
+        // Send to Supabase Registrations Table
+        await databaseService.createRegistration(dbConfig, {
+            ...regData,
+            password: regData.password
+        });
         setRegSuccess(true);
     } catch (error) {
         console.error(error);
-        setLoginError("Gagal mendaftar.");
+        setLoginError("Gagal mengirim data ke database. Periksa koneksi.");
     } finally {
         setLoading(false);
     }
   };
 
-  const handleExistingUserJoinWorkspace = (e: React.FormEvent) => {
+  const handleCreateWorkspace = (e: React.FormEvent) => {
       e.preventDefault();
+      if (!user) return;
+
+      const newWsId = `WS-${Date.now()}`;
+      // Generate Simple Code: 2 letters + 4 random alphanumeric (e.g., AR-X9B2)
+      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const newInviteCode = `AR-${randomSuffix}`;
       
-      const code = new URL(joinWorkspaceUrl).searchParams.get('join') || joinWorkspaceUrl;
+      const newWs: Workspace = {
+          id: newWsId,
+          name: newWorkspaceData.name || `${user.name}'s Studio`,
+          color: newWorkspaceData.color,
+          inviteCode: newInviteCode,
+          ownerId: user.id,
+          members: [] // User added below
+      };
+
+      const updatedUser: User = {
+          ...user,
+          workspaceId: newWsId,
+          role: 'superuser',
+          jobdesk: 'Owner'
+      };
+      
+      newWs.members = [updatedUser];
+
+      // Update States
+      const updatedWorkspaces = [...workspaces, newWs];
+      const updatedUsers = allUsers.map(u => u.id === user.id ? updatedUser : u);
+
+      setWorkspaces(updatedWorkspaces);
+      setAllUsers(updatedUsers);
+      setUser(updatedUser);
+      localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
+      
+      // Update DB (Optional based on your mock structure, usually you'd upsert user)
+      const dbConfig = getDbConfig();
+      databaseService.upsertUser(dbConfig, updatedUser);
+
+      setSetupStep('choice'); // Reset
+  };
+
+  const handleJoinByCode = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!user) return;
+
+      const code = workspaceCodeInput.trim().toUpperCase();
       const targetWs = workspaces.find(w => w.inviteCode === code);
 
       if (!targetWs) {
-          alert("Kode/Link Workspace tidak valid.");
+          alert("Kode Workspace tidak ditemukan!");
           return;
       }
 
-      if (targetWs.members.some(m => m.email === user?.email)) {
+      // Check if already member
+      if (targetWs.members.some(m => m.email === user.email)) {
           alert("Anda sudah menjadi member di workspace ini.");
           return;
       }
 
-      // Create NEW Profile for SAME Email in NEW Workspace
-      const newProfile: User = {
-          ...user!,
-          id: `U-${Date.now()}`, // New ID for new profile context
+      // Logic: Update current user to belong to this workspace
+      // Note: In a real multi-tenancy, we might create a link. Here we update the user object.
+      
+      const updatedUser: User = {
+          ...user,
+          id: `U-${Date.now()}`, // Create NEW profile ID for this workspace context (Multi-profile architecture)
           workspaceId: targetWs.id,
-          role: 'viewer', // Default role when joining
-          jobdesk: 'New Member',
-          permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
-          kpi: [],
-          activityLogs: [],
-          performanceScore: 0
+          role: 'viewer',
+          jobdesk: 'Member'
       };
 
-      const updatedWs = { ...targetWs, members: [...targetWs.members, newProfile] };
-      setWorkspaces(workspaces.map(w => w.id === targetWs.id ? updatedWs : w));
-      setAllUsers([...allUsers, newProfile]);
+      const updatedWs = { ...targetWs, members: [...targetWs.members, updatedUser] };
       
-      // Auto switch
-      alert(`Berhasil bergabung ke ${targetWs.name}! Mengalihkan profil...`);
-      switchProfile(newProfile);
+      setWorkspaces(workspaces.map(w => w.id === targetWs.id ? updatedWs : w));
+      setAllUsers([...allUsers, updatedUser]);
+      
+      // Switch to new profile
+      switchProfile(updatedUser);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -276,23 +257,39 @@ const App: React.FC = () => {
         return;
     }
 
-    // Local DB Check
-    const foundUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail && (u.password === cleanPassword || cleanPassword === 'Social123')); // Accept default pass for demo
-
-    if (foundUser) {
-        if (foundUser.status === 'suspended') {
-            setLoginError("Akun disuspend.");
-            setLoading(false);
-            return;
-        }
+    // DB Verification
+    const dbConfig = getDbConfig();
+    try {
+        let loggedInUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail && (u.password === cleanPassword || cleanPassword === 'Social123'));
         
-        setUser(foundUser);
-        localStorage.setItem('sf_session_user', JSON.stringify(foundUser));
-        setAuthState('authenticated');
-    } else {
-        setLoginError("Email atau password salah.");
+        // If not in local, try remote (simulate sync)
+        if (!loggedInUser && dbConfig.url && dbConfig.key) {
+             const remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
+             if (remoteUser && (remoteUser.password === cleanPassword || cleanPassword === 'Social123')) {
+                 loggedInUser = remoteUser;
+                 // Add to local cache if new
+                 setAllUsers(prev => [...prev, remoteUser]);
+             }
+        }
+
+        if (loggedInUser) {
+            if (loggedInUser.status === 'suspended') {
+                setLoginError("Akun disuspend.");
+            } else if (loggedInUser.status === 'pending') {
+                setLoginError("Akun belum disetujui admin.");
+            } else {
+                setUser(loggedInUser);
+                localStorage.setItem('sf_session_user', JSON.stringify(loggedInUser));
+                setAuthState('authenticated');
+            }
+        } else {
+            setLoginError("Email atau password salah.");
+        }
+    } catch (err) {
+        setLoginError("Error login.");
+    } finally {
+        setLoading(false);
     }
-    setLoading(false);
   };
 
   // Other handlers remain same...
@@ -328,8 +325,6 @@ const App: React.FC = () => {
 
   const handleRegistrationAction = async (regId: string, status: 'approved' | 'rejected') => {
       setRegistrations(prev => prev.map(r => r.id === regId ? { ...r, status } : r));
-      
-      // Update cloud if needed
       await cloudService.updateRegistrationStatus(regId, status);
   };
 
@@ -346,11 +341,12 @@ const App: React.FC = () => {
 
   // --- RENDER ---
 
+  // 1. REGISTRATION PAGE
   if (authState === 'register') {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
-        <div className="max-w-[500px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-8 border border-gray-100 animate-slide">
-          <button onClick={() => { setAuthState('login'); setRegStep('type_selection'); setRegSuccess(false); }} className="flex items-center gap-2 text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest transition-colors">
+        <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-8 border border-gray-100 animate-slide">
+          <button onClick={() => { setAuthState('login'); setRegSuccess(false); }} className="flex items-center gap-2 text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest transition-colors">
             <ChevronLeft size={16} /> Back to Login
           </button>
 
@@ -358,98 +354,30 @@ const App: React.FC = () => {
             <div className="text-center space-y-6">
                 <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto animate-bounce"><CheckCircle size={40}/></div>
                 <div>
-                    <h2 className="text-2xl font-black text-gray-900">Selamat Bergabung!</h2>
-                    <p className="text-gray-500 text-sm mt-2">Akun Anda telah dibuat. Silakan login untuk memulai.</p>
+                    <h2 className="text-2xl font-black text-gray-900">Registrasi Berhasil!</h2>
+                    <p className="text-gray-500 text-sm mt-2">Data Anda telah dikirim ke Admin. Silakan tunggu approval dan login kembali nanti.</p>
                 </div>
-                <button onClick={() => setAuthState('login')} className="w-full py-4 bg-gray-900 text-white font-black rounded-2xl">Login Sekarang</button>
+                <button onClick={() => setAuthState('login')} className="w-full py-4 bg-gray-900 text-white font-black rounded-2xl">Kembali ke Login</button>
             </div>
           ) : (
             <>
                 <div className="space-y-2">
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tighter">
-                        {regStep === 'type_selection' ? 'Pilih Akses' : 
-                         regStep === 'details' ? 'Isi Data Diri' : 'Setup Workspace'}
-                    </h1>
-                    <p className="text-gray-400 font-medium text-sm">Step {regStep === 'type_selection' ? '1' : regStep === 'details' ? '2' : '3'} of 3</p>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Daftar Akun Baru</h1>
+                    <p className="text-gray-400 font-medium text-sm">Isi data diri untuk mengajukan akses.</p>
                 </div>
 
-                <form onSubmit={handleRegisterSubmit} className="space-y-6">
-                    {/* STEP 1: PILIH TIPE */}
-                    {regStep === 'type_selection' && (
-                        <div className="grid gap-4">
-                            <button type="button" onClick={() => { setRegData({...regData, workspaceChoice: 'join'}); setRegStep('details'); }} className="p-6 rounded-3xl border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50 transition-all text-left group">
-                                <Link size={24} className="text-gray-300 group-hover:text-blue-500 mb-3" />
-                                <h3 className="font-black text-gray-900">Join Existing Team</h3>
-                                <p className="text-xs text-gray-400 mt-1">Saya punya link invite untuk bergabung ke workspace tim.</p>
-                            </button>
-                            <button type="button" onClick={() => { setRegData({...regData, workspaceChoice: 'create'}); setRegStep('details'); }} className="p-6 rounded-3xl border-2 border-gray-100 hover:border-purple-500 hover:bg-purple-50 transition-all text-left group">
-                                <Building2 size={24} className="text-gray-300 group-hover:text-purple-500 mb-3" />
-                                <h3 className="font-black text-gray-900">Create New Workspace</h3>
-                                <p className="text-xs text-gray-400 mt-1">Saya ingin membuat workspace baru untuk tim saya sendiri.</p>
-                            </button>
-                        </div>
-                    )}
-
-                    {/* STEP 2: DATA DIRI */}
-                    {regStep === 'details' && (
-                        <div className="space-y-4">
-                            <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Nama Lengkap</label><input required value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all" placeholder="John Doe"/></div>
-                            <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Email</label><input required type="email" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all" placeholder="email@domain.com"/></div>
-                            <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Password</label><input required type="password" value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all" placeholder="******"/></div>
-                            
-                            <button type="button" onClick={() => setRegStep('workspace_setup')} className="w-full py-5 bg-gray-900 text-white font-black rounded-2xl mt-4 flex justify-center items-center gap-2">
-                                Lanjut <ArrowRight size={16}/>
-                            </button>
-                        </div>
-                    )}
-
-                    {/* STEP 3: WORKSPACE SETUP */}
-                    {regStep === 'workspace_setup' && (
-                        <div className="space-y-6">
-                            {regData.workspaceChoice === 'join' ? (
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-gray-400 ml-3">Paste Invite Link / Code</label>
-                                    <input 
-                                        required 
-                                        value={regData.inviteCode} 
-                                        onChange={e => {
-                                            const val = e.target.value;
-                                            // Extract code if url is pasted
-                                            const code = val.includes('join=') ? val.split('join=')[1] : val;
-                                            setRegData({...regData, inviteCode: code})
-                                        }}
-                                        className="w-full px-6 py-4 bg-blue-50 border border-blue-100 text-blue-600 rounded-2xl outline-none font-bold transition-all text-center text-lg placeholder:text-blue-300" 
-                                        placeholder="Paste Link Here"
-                                    />
-                                    <p className="text-center text-xs text-gray-400 mt-3">Link ini didapatkan dari Owner Workspace.</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-400 ml-3">Nama Workspace</label>
-                                        <input required value={regData.workspaceName} onChange={e => setRegData({...regData, workspaceName: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all" placeholder="My Creative Studio"/>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase text-gray-400 ml-3">Warna Tema</label>
-                                        <div className="flex gap-2 mt-2">
-                                            {['blue', 'purple', 'emerald', 'rose'].map((c) => (
-                                                <button 
-                                                    key={c}
-                                                    type="button" 
-                                                    onClick={() => setRegData({...regData, workspaceColor: c as any})} 
-                                                    className={`w-8 h-8 rounded-full border-2 ${regData.workspaceColor === c ? 'border-gray-900 scale-110' : 'border-transparent'} bg-${c}-500 transition-all`}
-                                                ></button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <button type="submit" disabled={loading} className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all">
-                                {loading ? <Loader2 className="animate-spin mx-auto"/> : (regData.workspaceChoice === 'join' ? 'Gabung Tim' : 'Buat Workspace')}
-                            </button>
-                        </div>
-                    )}
+                <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                    {loginError && <p className="text-rose-500 text-xs font-bold bg-rose-50 p-3 rounded-xl">{loginError}</p>}
+                    
+                    <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Nama Lengkap</label><input required value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all text-sm" placeholder="John Doe"/></div>
+                    <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Email</label><input required type="email" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all text-sm" placeholder="email@domain.com"/></div>
+                    <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Password</label><input required type="password" value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all text-sm" placeholder="******"/></div>
+                    <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">WhatsApp</label><input required value={regData.whatsapp} onChange={e => setRegData({...regData, whatsapp: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all text-sm" placeholder="628..."/></div>
+                    <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Alasan</label><input required value={regData.reason} onChange={e => setRegData({...regData, reason: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all text-sm" placeholder="Untuk manajemen konten..."/></div>
+                    
+                    <button type="submit" disabled={loading} className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl mt-4 flex justify-center items-center gap-2 shadow-xl shadow-blue-200 active:scale-95 transition-all">
+                        {loading ? <Loader2 className="animate-spin"/> : 'Kirim Data'}
+                    </button>
                 </form>
             </>
           )}
@@ -458,7 +386,91 @@ const App: React.FC = () => {
     );
   }
 
-  // --- LOGIN VIEW ---
+  // 2. WORKSPACE SETUP (If Logged in but No Workspace ID)
+  if (authState === 'authenticated' && user && !user.workspaceId && !isDev) {
+      return (
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 font-sans">
+            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 animate-slide">
+                {/* Header Section */}
+                <div className="md:col-span-2 text-center mb-4">
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Selamat Datang, {user.name}!</h1>
+                    <p className="text-gray-400 mt-2">Anda belum terhubung ke Workspace manapun. Pilih opsi di bawah untuk memulai.</p>
+                </div>
+
+                {/* Option 1: Join Existing */}
+                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-xl flex flex-col items-center text-center space-y-6 hover:border-blue-200 transition-all group relative overflow-hidden">
+                    <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform"><Hash size={32}/></div>
+                    <div>
+                        <h2 className="text-xl font-black text-gray-900">Gabung Tim</h2>
+                        <p className="text-gray-400 text-xs mt-2 px-8">Masukkan kode unik workspace yang diberikan oleh atasan atau rekan tim Anda.</p>
+                    </div>
+                    {setupStep === 'join' ? (
+                        <form onSubmit={handleJoinByCode} className="w-full space-y-4 animate-slide">
+                            <input 
+                                autoFocus
+                                value={workspaceCodeInput} 
+                                onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())}
+                                className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-center font-black text-lg tracking-widest outline-none uppercase placeholder:normal-case placeholder:tracking-normal placeholder:font-normal"
+                                placeholder="Contoh: AR-X7Y2"
+                            />
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setSetupStep('choice')} className="flex-1 py-3 text-gray-400 font-bold text-xs">Batal</button>
+                                <button type="submit" className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg">Gabung</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <button onClick={() => setSetupStep('join')} className="px-8 py-3 bg-white border-2 border-gray-100 text-gray-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all">Input Kode Join</button>
+                    )}
+                </div>
+
+                {/* Option 2: Create New */}
+                <div className="bg-gray-900 p-10 rounded-[3rem] shadow-2xl flex flex-col items-center text-center space-y-6 text-white group relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                    <div className="w-20 h-20 bg-white/10 text-white rounded-full flex items-center justify-center group-hover:scale-110 transition-transform backdrop-blur-sm"><Building2 size={32}/></div>
+                    <div>
+                        <h2 className="text-xl font-black">Buat Workspace Baru</h2>
+                        <p className="text-gray-400 text-xs mt-2 px-8">Bangun ruang kerja baru untuk tim Anda dan jadilah Owner.</p>
+                    </div>
+                    
+                    {setupStep === 'create' ? (
+                        <form onSubmit={handleCreateWorkspace} className="w-full space-y-4 animate-slide">
+                            <input 
+                                autoFocus
+                                required
+                                value={newWorkspaceData.name} 
+                                onChange={e => setNewWorkspaceData({...newWorkspaceData, name: e.target.value})}
+                                className="w-full px-6 py-4 bg-white/10 border border-white/20 rounded-2xl text-center font-bold text-white placeholder:text-gray-500 outline-none"
+                                placeholder="Nama Workspace"
+                            />
+                            <div className="flex justify-center gap-2">
+                                {['blue', 'purple', 'emerald', 'rose'].map((c) => (
+                                    <button 
+                                        key={c}
+                                        type="button" 
+                                        onClick={() => setNewWorkspaceData({...newWorkspaceData, color: c as ThemeColor})} 
+                                        className={`w-6 h-6 rounded-full border-2 ${newWorkspaceData.color === c ? 'border-white scale-110' : 'border-transparent'} bg-${c}-500`}
+                                    ></button>
+                                ))}
+                            </div>
+                            <div className="flex gap-2">
+                                <button type="button" onClick={() => setSetupStep('choice')} className="flex-1 py-3 text-gray-500 font-bold text-xs">Batal</button>
+                                <button type="submit" className="flex-[2] py-3 bg-white text-gray-900 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg">Buat Sekarang</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <button onClick={() => setSetupStep('create')} className="px-8 py-3 bg-white/10 border border-white/10 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-white hover:text-gray-900 transition-all">Setup Baru</button>
+                    )}
+                </div>
+            </div>
+            
+            <button onClick={() => { setUser(null); setAuthState('login'); }} className="fixed bottom-8 text-gray-400 text-xs font-bold hover:text-rose-500 transition-colors">
+                Logout Akun
+            </button>
+        </div>
+      );
+  }
+
+  // 3. LOGIN PAGE
   if (authState === 'login') {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
@@ -514,24 +526,24 @@ const App: React.FC = () => {
     );
   }
 
-  // --- JOIN WORKSPACE MODAL (For Logged In Users) ---
+  // --- JOIN WORKSPACE MODAL (For Logged In Users who want to join ANOTHER workspace) ---
   const JoinWorkspaceModal = () => (
       isJoinWorkspaceModalOpen && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/50 backdrop-blur-sm">
               <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-slide relative">
                   <button onClick={() => setIsJoinWorkspaceModalOpen(false)} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full hover:bg-gray-100"><ArrowRight size={18}/></button>
                   <div className="text-center mb-8">
-                      <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-4"><Link size={32}/></div>
-                      <h2 className="text-2xl font-black text-gray-900">Gabung Workspace</h2>
-                      <p className="text-gray-400 text-sm mt-2">Paste link invite untuk menambahkan profil baru di workspace tersebut.</p>
+                      <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-4"><Hash size={32}/></div>
+                      <h2 className="text-2xl font-black text-gray-900">Gabung Workspace Lain</h2>
+                      <p className="text-gray-400 text-sm mt-2">Masukkan 6 digit Kode Unik Workspace tujuan.</p>
                   </div>
-                  <form onSubmit={handleExistingUserJoinWorkspace} className="space-y-4">
+                  <form onSubmit={handleJoinByCode} className="space-y-4">
                       <input 
                         required
-                        value={joinWorkspaceUrl}
-                        onChange={e => setJoinWorkspaceUrl(e.target.value)}
-                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-center"
-                        placeholder="https://app.arunika.id?join=XYZ..."
+                        value={workspaceCodeInput}
+                        onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())}
+                        className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-black text-center text-xl tracking-widest uppercase placeholder:text-gray-300"
+                        placeholder="AR-XXXX"
                       />
                       <button type="submit" className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl shadow-xl active:scale-95 transition-all">
                           Gabung Sekarang
@@ -548,7 +560,7 @@ const App: React.FC = () => {
       
       {topNotification && (
         <TopNotification 
-          primaryColor={activeWorkspace.color}
+          primaryColor={activeWorkspace?.color || 'blue'}
           senderName={topNotification.senderName}
           messageText={topNotification.messageText}
           onClose={() => setTopNotification(null)}
@@ -574,12 +586,12 @@ const App: React.FC = () => {
         {/* Header Mobile */}
         <div className="flex items-center justify-between mb-8 md:hidden">
            <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm"><Menu size={24} /></button>
-           <h2 className="text-sm font-black text-gray-900 tracking-tighter uppercase">{isDev ? 'Developer Access' : activeWorkspace.name}</h2>
+           <h2 className="text-sm font-black text-gray-900 tracking-tighter uppercase">{isDev ? 'Developer Access' : activeWorkspace?.name || 'Dashboard'}</h2>
         </div>
 
         <div className="max-w-6xl mx-auto w-full">
-           {activeTab === 'dashboard' && !isDev && <Dashboard primaryColor={activeWorkspace.color} />}
-           {activeTab === 'contentPlan' && !isDev && (
+           {activeTab === 'dashboard' && !isDev && activeWorkspace && <Dashboard primaryColor={activeWorkspace.color} />}
+           {activeTab === 'contentPlan' && !isDev && activeWorkspace && (
              <ContentPlan 
                primaryColorHex={primaryColorHex} 
                onSaveInsight={saveAnalytics} 
@@ -591,11 +603,11 @@ const App: React.FC = () => {
                targetContentId={targetContentId}
              />
            )}
-           {activeTab === 'calendar' && !isDev && <Calendar primaryColor={activeWorkspace.color} />}
-           {activeTab === 'ads' && !isDev && <AdsWorkspace primaryColor={activeWorkspace.color} />}
+           {activeTab === 'calendar' && !isDev && activeWorkspace && <Calendar primaryColor={activeWorkspace.color} />}
+           {activeTab === 'ads' && !isDev && activeWorkspace && <AdsWorkspace primaryColor={activeWorkspace.color} />}
            {activeTab === 'analytics' && !isDev && <Analytics primaryColorHex={primaryColorHex} analyticsData={analyticsData} onSaveInsight={saveAnalytics} />}
            {activeTab === 'tracker' && !isDev && <LinkTracker primaryColorHex={primaryColorHex} onSaveManualInsight={saveAnalytics} />}
-           {activeTab === 'team' && !isDev && (
+           {activeTab === 'team' && !isDev && activeWorkspace && (
              <Team 
                primaryColor={activeWorkspace.color} 
                currentUser={user!} 
@@ -609,7 +621,7 @@ const App: React.FC = () => {
              />
            )}
            {activeTab === 'settings' && !isDev && <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex="#DDD6FE" setAccentColorHex={()=>{}} fontSize="medium" setFontSize={()=>{}} customLogo={customLogo} setCustomLogo={setCustomLogo} />}
-           {activeTab === 'profile' && !isDev && (
+           {activeTab === 'profile' && !isDev && activeWorkspace && (
              <Profile 
                user={user!} 
                primaryColor={activeWorkspace.color} 
@@ -635,7 +647,7 @@ const App: React.FC = () => {
            )}
         </div>
 
-        {!isDev && (
+        {!isDev && activeWorkspace && (
           <ChatPopup 
             primaryColor={activeWorkspace.color}
             currentUser={user!}
