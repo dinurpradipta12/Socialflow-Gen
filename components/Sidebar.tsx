@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, Calendar, Megaphone, BarChart3, Link2, Users, Settings, LogOut, FileSpreadsheet, Database, Clock as ClockIcon
+  LayoutDashboard, Calendar, Megaphone, BarChart3, Link2, Users, Settings, LogOut, FileSpreadsheet, Database, Clock as ClockIcon, Bell
 } from 'lucide-react';
-import { User } from '../types';
+import { User, SystemNotification } from '../types';
 import { APP_NAME } from '../constants';
 
 interface SidebarProps {
@@ -14,10 +14,17 @@ interface SidebarProps {
   user: User;
   appLogo?: string | null;
   isOpen?: boolean;
+  unreadNotifications?: number;
+  notifications?: SystemNotification[];
+  onMarkRead?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, user, appLogo, isOpen = false }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+  activeTab, setActiveTab, onLogout, user, appLogo, isOpen = false,
+  unreadNotifications = 0, notifications = [], onMarkRead
+}) => {
   const [time, setTime] = useState(new Date());
+  const [showNotifHistory, setShowNotifHistory] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -42,7 +49,27 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
 
   return (
     <div className={`fixed inset-y-0 left-0 w-72 bg-white border-r border-gray-100 flex flex-col z-[100] transition-transform duration-300 ease-in-out transform ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} shadow-2xl md:shadow-none`}>
-      <div className="p-6 flex flex-col h-full">
+      <div className="p-6 flex flex-col h-full relative">
+        {/* Notification Overlay Panel */}
+        {showNotifHistory && (
+          <div className="absolute left-72 top-6 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-[110] animate-slide overflow-hidden max-h-[80vh] flex flex-col">
+             <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-50">
+                <h3 className="text-sm font-black text-gray-900">Riwayat Notifikasi</h3>
+                <button onClick={() => setShowNotifHistory(false)} className="text-xs text-gray-400 hover:text-gray-900">Tutup</button>
+             </div>
+             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3">
+                {notifications.length === 0 && <p className="text-center text-xs text-gray-300 py-4">Belum ada notifikasi.</p>}
+                {notifications.map((n) => (
+                   <div key={n.id} className="p-3 bg-gray-50 rounded-xl border border-gray-50 hover:bg-blue-50 transition-colors">
+                      <p className="text-[10px] font-black text-gray-900 mb-1">{n.senderName}</p>
+                      <p className="text-xs text-gray-500 leading-tight">{n.messageText}</p>
+                      <p className="text-[9px] text-gray-300 mt-2 text-right">{new Date(n.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                   </div>
+                ))}
+             </div>
+          </div>
+        )}
+
         {/* Logo Section */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -59,8 +86,20 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
         </div>
 
         {/* User Info Card */}
-        <div className="mb-6 p-5 bg-gray-50/80 rounded-3xl border border-gray-100 shadow-sm">
-           <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">{user.role} Access</p>
+        <div className="mb-6 p-5 bg-gray-50/80 rounded-3xl border border-gray-100 shadow-sm relative">
+           <div className="flex justify-between items-start mb-1">
+              <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{user.role} Access</p>
+              {/* Notification Bell */}
+              <button 
+                onClick={() => { setShowNotifHistory(!showNotifHistory); if(onMarkRead) onMarkRead(); }} 
+                className="relative p-1.5 bg-white rounded-lg shadow-sm hover:bg-gray-100 transition-colors"
+              >
+                 <Bell size={14} className="text-gray-500" />
+                 {unreadNotifications > 0 && (
+                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-white"></span>
+                 )}
+              </button>
+           </div>
            <p className="text-sm font-black text-gray-900 truncate">{user.name}</p>
            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100">
               <ClockIcon size={12} className="text-gray-400" />

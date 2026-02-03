@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { ContentPlanItem, PostInsight, User, Comment, SystemNotification } from '../types';
+import { ContentPlanItem, PostInsight, User, Comment, SystemNotification, SocialAccount } from '../types';
 import { MOCK_CONTENT_PLANS } from '../constants';
 import { scrapePostInsights } from '../services/geminiService';
-import { Plus, ChevronDown, ChevronUp, FileText, Link as LinkIcon, ExternalLink, X, Save, Settings, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send } from 'lucide-react';
+import { Plus, ChevronDown, ChevronUp, FileText, Link as LinkIcon, ExternalLink, X, Save, Settings, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send, Edit, Trash2 } from 'lucide-react';
 
 interface ContentPlanProps {
   primaryColorHex: string;
@@ -11,16 +11,13 @@ interface ContentPlanProps {
   users: User[];
   addNotification: (notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) => void;
   currentUser: User;
+  accounts: SocialAccount[];
+  setAccounts: (accounts: SocialAccount[]) => void;
 }
 
 const INITIAL_STATUS_OPTIONS: ContentPlanItem['status'][] = ['Drafting', 'Dijadwalkan', 'Diposting', 'Revisi', 'Reschedule', 'Dibatalkan'];
-const ACCOUNTS = [
-    { id: 'account-1', name: 'Akun Utama' }, 
-    { id: 'account-2', name: 'Second Account' }, 
-    { id: 'account-3', name: 'Brand Partner' }
-];
 
-const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight, users, addNotification, currentUser }) => {
+const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight, users, addNotification, currentUser, accounts, setAccounts }) => {
   const [items, setItems] = useState<ContentPlanItem[]>(MOCK_CONTENT_PLANS);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,9 +25,14 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [filterApprovedBy, setFilterApprovedBy] = useState<string>('All');
   const [filterPlatform, setFilterPlatform] = useState<'All' | 'Instagram' | 'TikTok'>('All');
-  const [activeAccount, setActiveAccount] = useState<string>('account-1');
+  const [activeAccount, setActiveAccount] = useState<string>(accounts[0]?.id || 'account-1');
   const [lastAutoSave, setLastAutoSave] = useState<string | null>(null);
   
+  // Account Management State
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [accountFormData, setAccountFormData] = useState({ name: '', instagram: '', tiktok: '' });
+  const [editingAccount, setEditingAccount] = useState<SocialAccount | null>(null);
+
   // Comment State
   const [commentText, setCommentText] = useState('');
 
@@ -62,6 +64,27 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     return () => clearInterval(intervalId);
   }, [isModalOpen, formData]);
 
+  const handleSaveAccount = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (editingAccount) {
+          // Rename Logic
+          setAccounts(accounts.map(acc => acc.id === editingAccount.id ? { ...acc, name: accountFormData.name, instagramUsername: accountFormData.instagram, tiktokUsername: accountFormData.tiktok } : acc));
+          setEditingAccount(null);
+      } else {
+          // Add Logic
+          const newAccount: SocialAccount = {
+              id: `acc-${Date.now()}`,
+              name: accountFormData.name,
+              instagramUsername: accountFormData.instagram,
+              tiktokUsername: accountFormData.tiktok
+          };
+          setAccounts([...accounts, newAccount]);
+          setActiveAccount(newAccount.id); // Switch to new account
+      }
+      setIsAccountModalOpen(false);
+      setAccountFormData({ name: '', instagram: '', tiktok: '' });
+  };
+
   const openEditModal = (item: ContentPlanItem) => {
     setEditingItem(item);
     setFormData({
@@ -80,6 +103,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     } else {
       const newItem: ContentPlanItem = { 
         id: Date.now().toString(), 
+        creatorId: currentUser.id,
         ...formData, 
         accountId: activeAccount, 
         comments: [] 
@@ -128,12 +152,33 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           return i;
       }));
 
-      // Trigger Notification to Approver or Owner
+      // Trigger Notification Logic
       const item = items.find(i => i.id === itemId);
-      if (item && item.approvedBy && item.approvedBy !== currentUser.name) {
+      
+      // Regex check for @mention
+      const mentions = commentText.match(/@(\w+)/g);
+      const mentionedUser = mentions ? mentions[0].replace('@', '') : null;
+
+      // 1. Notify Creator if someone else comments
+      if (item && item.creatorId !== currentUser.id) {
+          // Cari nama creator (optional if stored in item, assuming creatorId matches user list)
+          const creator = users.find(u => u.id === item.creatorId);
+          // Only notify if we found the user or generic
           addNotification({
               senderName: currentUser.name,
-              messageText: `Komentar baru di "${item.title}": ${commentText}`,
+              messageText: `Mengomentari konten Anda: "${item.title}"`,
+              type: 'info'
+          });
+      }
+
+      // 2. Notify Mentioned User
+      if (mentionedUser) {
+          // Prevent double notification if creator is mentioned (handled above logic usually separates)
+          // Simply trigger alert for now
+          // In real app, check if mentionedUser exists in users array
+          addNotification({
+              senderName: currentUser.name,
+              messageText: `Me-mention Anda dalam komentar: "${commentText}"`,
               type: 'info'
           });
       }
@@ -141,14 +186,21 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       setCommentText('');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent, itemId: string) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handlePostComment(itemId);
+      }
+  };
+
   const filteredItems = items.filter(item => {
     // Account Filter
     if (item.accountId && item.accountId !== activeAccount) return false;
     // Approval Filter
     if (filterApprovedBy !== 'All' && item.approvedBy !== filterApprovedBy) return false;
-    // Platform Filter (Naive check based on link or type)
+    // Platform Filter
     if (filterPlatform !== 'All') {
-        const isInsta = item.postLink.includes('instagram') || item.type.toLowerCase().includes('reel');
+        const isInsta = item.postLink.includes('instagram') || item.type.toLowerCase().includes('reel') || item.type.toLowerCase().includes('carousel');
         const isTikTok = item.postLink.includes('tiktok');
         if (filterPlatform === 'Instagram' && !isInsta) return false;
         if (filterPlatform === 'TikTok' && !isTikTok) return false;
@@ -157,6 +209,15 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   });
 
   const uniqueApprovers = Array.from(new Set(users.map(u => u.name)));
+
+  // Helper for row visual style
+  const getRowStyle = (item: ContentPlanItem) => {
+      // Determine platform
+      const isInsta = item.postLink.includes('instagram') || item.type.toLowerCase().includes('reel');
+      // Style logic: IG -> Purple, TikTok -> Black (Slate-900)
+      if (isInsta) return "border-l-[6px] border-l-purple-500 bg-purple-50/30";
+      return "border-l-[6px] border-l-slate-900 bg-gray-50/50";
+  };
 
   return (
     <div className="space-y-6 animate-slide">
@@ -187,23 +248,53 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
       {/* Account Tabs */}
       <div className="flex items-center gap-4 overflow-x-auto pb-2">
-         {ACCOUNTS.map(acc => (
+         {accounts.map(acc => (
              <button 
                 key={acc.id}
                 onClick={() => setActiveAccount(acc.id)}
-                className={`px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border ${
+                className={`group relative px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border flex items-center gap-2 ${
                     activeAccount === acc.id 
                     ? 'bg-white border-blue-200 text-blue-600 shadow-lg shadow-blue-50 ring-2 ring-blue-50' 
                     : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
                 }`}
              >
                 {acc.name}
+                {activeAccount === acc.id && (
+                    <span onClick={(e) => { e.stopPropagation(); setEditingAccount(acc); setAccountFormData({name: acc.name, instagram: acc.instagramUsername || '', tiktok: acc.tiktokUsername || ''}); setIsAccountModalOpen(true); }} className="ml-2 p-1 hover:bg-blue-50 rounded-full transition-colors">
+                        <Edit size={12} />
+                    </span>
+                )}
              </button>
          ))}
-         <button className="px-4 py-3 bg-gray-50 text-gray-400 rounded-2xl border border-dashed border-gray-200 hover:border-gray-400 transition-all">
+         <button onClick={() => { setEditingAccount(null); setAccountFormData({name: '', instagram: '', tiktok: ''}); setIsAccountModalOpen(true); }} className="px-4 py-3 bg-gray-50 text-gray-400 rounded-2xl border border-dashed border-gray-200 hover:border-gray-400 transition-all">
             <Plus size={16}/>
          </button>
       </div>
+
+      {/* Account Modal (Add/Edit) */}
+      {isAccountModalOpen && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
+             <div className="absolute inset-0 bg-white/50 backdrop-blur-sm" onClick={() => setIsAccountModalOpen(false)}></div>
+             <div className="relative bg-white w-full max-w-sm rounded-[2rem] shadow-2xl p-8 border border-gray-100 animate-slide">
+                 <h2 className="text-xl font-black text-gray-900 mb-6">{editingAccount ? 'Edit Akun' : 'Tambah Akun Baru'}</h2>
+                 <form onSubmit={handleSaveAccount} className="space-y-4">
+                     <div>
+                         <label className="text-[10px] font-black uppercase text-gray-400">Nama Akun</label>
+                         <input required value={accountFormData.name} onChange={e => setAccountFormData({...accountFormData, name: e.target.value})} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-100 outline-none font-bold text-sm" placeholder="Contoh: Akun Utama" />
+                     </div>
+                     <div>
+                         <label className="text-[10px] font-black uppercase text-gray-400">Instagram Username</label>
+                         <input value={accountFormData.instagram} onChange={e => setAccountFormData({...accountFormData, instagram: e.target.value})} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-100 outline-none font-bold text-sm" placeholder="@username" />
+                     </div>
+                     <div>
+                         <label className="text-[10px] font-black uppercase text-gray-400">TikTok Username</label>
+                         <input value={accountFormData.tiktok} onChange={e => setAccountFormData({...accountFormData, tiktok: e.target.value})} className="w-full px-4 py-3 bg-gray-50 rounded-xl border border-gray-100 outline-none font-bold text-sm" placeholder="@username" />
+                     </div>
+                     <button type="submit" className="w-full py-4 bg-gray-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest mt-2">Simpan Akun</button>
+                 </form>
+             </div>
+          </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-6">
@@ -226,7 +317,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
               <form onSubmit={handleSave} className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1 bg-white">
                  <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                       <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Judul Posting</label>
+                       <label className="text-[10px] font-black text-gray-300 uppercase tracking-widest ml-1">Judul Posting (Content Title)</label>
                        <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border border-gray-100 focus:border-blue-200 transition-all" />
                     </div>
                     <div className="space-y-2">
@@ -292,20 +383,28 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
             <thead className="bg-gray-50 border-b border-gray-100">
                <tr>
                   <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest">Status</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest">Judul</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest">Judul Konten</th>
+                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest">Post Link</th>
                   <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Aksi</th>
                </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
                {filteredItems.map(item => (
                   <React.Fragment key={item.id}>
-                     <tr className="hover:bg-gray-50 transition-all cursor-pointer group" onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
+                     <tr className={`hover:bg-gray-100 transition-all cursor-pointer group ${getRowStyle(item)}`} onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}>
                         <td className="px-8 py-6">
-                           <span className={`px-3 py-1 text-[10px] font-black rounded-lg uppercase tracking-widest border ${
-                             item.status === 'Diposting' ? 'bg-emerald-50 text-emerald-400 border-emerald-100' : 'bg-blue-50 text-blue-400 border-blue-100'
-                           }`}>{item.status}</span>
+                           <span className={`px-3 py-1 text-[10px] font-black rounded-lg uppercase tracking-widest border bg-white border-gray-200 text-gray-600`}>{item.status}</span>
                         </td>
                         <td className="px-8 py-6 text-sm font-bold text-gray-900">{item.title}</td>
+                        <td className="px-8 py-6">
+                            {item.postLink && item.postLink.length > 5 ? (
+                                <a href={item.postLink} target="_blank" onClick={(e) => e.stopPropagation()} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-[9px] font-bold text-blue-500 hover:text-blue-600 hover:border-blue-200 transition-colors">
+                                    <ExternalLink size={10} /> Open Link
+                                </a>
+                            ) : (
+                                <span className="text-[9px] font-bold text-gray-300 italic">No Link</span>
+                            )}
+                        </td>
                         <td className="px-8 py-6">
                            <div className="flex items-center justify-center gap-4">
                               {/* New Quick Analyze Button */}
@@ -315,20 +414,20 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                                     className={`p-2 rounded-xl transition-all shadow-sm ${
                                        analyzingId === item.id 
                                        ? 'bg-blue-100 text-blue-600 animate-pulse' 
-                                       : 'bg-blue-50 text-blue-400 hover:bg-blue-100 hover:scale-110 active:scale-95'
+                                       : 'bg-white text-blue-400 hover:bg-blue-50 hover:scale-110 active:scale-95'
                                     }`}
                                     title="AI Analyze Tracker"
                                  >
                                     {analyzingId === item.id ? <Loader2 size={16} className="animate-spin" /> : <BarChart2 size={16} />}
                                  </button>
                               )}
-                              <div className="p-2 text-gray-200 group-hover:text-gray-900 transition-all">{expandedId === item.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
+                              <div className="p-2 text-gray-400 group-hover:text-gray-900 transition-all">{expandedId === item.id ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}</div>
                            </div>
                         </td>
                      </tr>
                      {expandedId === item.id && (
                         <tr className="bg-gray-50/30 animate-slide">
-                           <td colSpan={3} className="px-10 py-8">
+                           <td colSpan={4} className="px-10 py-8">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                                  <div className="space-y-4">
                                     <h4 className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Informasi Strategis</h4>
@@ -367,26 +466,36 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                                  {/* Discussion / Comments Section */}
                                  <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm flex flex-col h-[400px]">
                                      <h4 className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4 flex items-center gap-2"><MessageSquare size={14}/> Diskusi & Revisi</h4>
-                                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4">
+                                     <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 mb-4 pr-2">
                                         {item.comments?.length === 0 && (
                                             <p className="text-center text-xs text-gray-300 italic py-10">Belum ada diskusi untuk konten ini.</p>
                                         )}
-                                        {item.comments?.map((c) => (
-                                            <div key={c.id} className="p-3 bg-gray-50 rounded-2xl border border-gray-100">
-                                                <p className="text-[10px] font-black text-blue-500 mb-1">{c.userName}</p>
-                                                <p className="text-xs text-gray-700">{c.text}</p>
-                                                <p className="text-[8px] text-gray-300 mt-2 text-right">{new Date(c.timestamp).toLocaleString()}</p>
-                                            </div>
-                                        ))}
+                                        {item.comments?.map((c) => {
+                                            const isMe = c.userId === currentUser.id;
+                                            return (
+                                                <div key={c.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                                    <div className={`p-3 rounded-2xl max-w-[80%] ${
+                                                        isMe 
+                                                        ? 'bg-blue-500 text-white rounded-br-sm' 
+                                                        : 'bg-gray-100 text-gray-700 rounded-bl-sm'
+                                                    }`}>
+                                                        {!isMe && <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-70">{c.userName}</p>}
+                                                        <p className="text-xs font-medium">{c.text}</p>
+                                                    </div>
+                                                    <p className="text-[8px] text-gray-300 mt-1">{new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                                </div>
+                                            );
+                                        })}
                                      </div>
-                                     <div className="flex gap-2">
+                                     <div className="flex gap-2 relative">
                                          <input 
                                             value={commentText} 
                                             onChange={(e) => setCommentText(e.target.value)}
-                                            placeholder="Tulis komentar atau revisi..." 
-                                            className="flex-1 px-4 py-3 bg-gray-50 rounded-xl outline-none text-xs font-medium"
+                                            onKeyDown={(e) => handleKeyDown(e, item.id)}
+                                            placeholder="Tulis komentar... (Enter untuk kirim)" 
+                                            className="flex-1 px-4 py-3 bg-gray-50 rounded-xl outline-none text-xs font-medium border border-transparent focus:bg-white focus:border-blue-100 transition-all"
                                          />
-                                         <button onClick={() => handlePostComment(item.id)} className="p-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors">
+                                         <button onClick={() => handlePostComment(item.id)} className="p-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors shadow-lg active:scale-95">
                                             <Send size={16}/>
                                          </button>
                                      </div>
@@ -399,7 +508,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                ))}
                {filteredItems.length === 0 && (
                  <tr>
-                   <td colSpan={3} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest">Tidak ada perencanaan ditemukan untuk filter ini</td>
+                   <td colSpan={4} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest">Tidak ada perencanaan ditemukan untuk filter ini</td>
                  </tr>
                )}
             </tbody>

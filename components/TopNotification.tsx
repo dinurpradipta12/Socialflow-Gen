@@ -24,7 +24,7 @@ const TopNotification: React.FC<TopNotificationProps> = ({
   const colorSet = THEME_COLORS[primaryColor];
 
   useEffect(() => {
-    const timer = setTimeout(onClose, 8000); // Extended for dev attention
+    const timer = setTimeout(onClose, 4000); // 4 seconds auto-hide
     return () => clearTimeout(timer);
   }, [onClose]);
 
@@ -39,7 +39,7 @@ const TopNotification: React.FC<TopNotificationProps> = ({
             <Bell size={20} />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Alert Developer</p>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Alert</p>
             <p className="text-sm font-black text-gray-900 truncate">{senderName}</p>
             <p className="text-xs text-gray-500 truncate font-medium">{messageText}</p>
           </div>

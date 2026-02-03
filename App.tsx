@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ThemeColor, Workspace, User, Message, PostInsight, RegistrationRequest, SystemNotification } from './types';
+import { ThemeColor, Workspace, User, Message, PostInsight, RegistrationRequest, SystemNotification, SocialAccount } from './types';
 import { MOCK_WORKSPACES, MOCK_USERS, DEV_CREDENTIALS, SUPABASE_CONFIG, APP_NAME } from './constants';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -44,8 +44,15 @@ const App: React.FC = () => {
   const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
   const [customLogo, setCustomLogo] = useState<string | null>(localStorage.getItem('sf_custom_logo'));
 
-  // Notifications
+  // Notifications State
   const [topNotification, setTopNotification] = useState<SystemNotification | null>(null);
+  const [notificationHistory, setNotificationHistory] = useState<SystemNotification[]>([]);
+  const [showNotifHistory, setShowNotifHistory] = useState(false);
+
+  // Accounts State (Multi-Account Feature)
+  const [accounts, setAccounts] = useState<SocialAccount[]>([
+    { id: 'account-1', name: 'Akun Utama', instagramUsername: '@arunika', tiktokUsername: '@arunika.id' }
+  ]);
 
   // States for Change Password Logic
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
@@ -304,6 +311,11 @@ const App: React.FC = () => {
       ...notif
     };
     setTopNotification(newNotif);
+    setNotificationHistory(prev => [newNotif, ...prev]);
+  };
+
+  const markNotificationsRead = () => {
+    setNotificationHistory(prev => prev.map(n => ({...n, read: true})));
   };
 
   const isDev = user?.role === 'developer';
@@ -535,6 +547,9 @@ const App: React.FC = () => {
         user={user!} 
         appLogo={customLogo}
         isOpen={isSidebarOpen}
+        unreadNotifications={notificationHistory.filter(n => !n.read).length}
+        notifications={notificationHistory}
+        onMarkRead={markNotificationsRead}
       />
       
       <main className={`flex-1 transition-all duration-300 min-h-screen md:ml-72 p-6 md:p-12 relative`}>
@@ -545,7 +560,17 @@ const App: React.FC = () => {
 
         <div className="max-w-6xl mx-auto w-full">
            {activeTab === 'dashboard' && !isDev && <Dashboard primaryColor={activeWorkspace.color} />}
-           {activeTab === 'contentPlan' && !isDev && <ContentPlan primaryColorHex={primaryColorHex} onSaveInsight={saveAnalytics} users={allUsers} addNotification={triggerNotification} currentUser={user!} />}
+           {activeTab === 'contentPlan' && !isDev && (
+             <ContentPlan 
+               primaryColorHex={primaryColorHex} 
+               onSaveInsight={saveAnalytics} 
+               users={allUsers} 
+               addNotification={triggerNotification} 
+               currentUser={user!}
+               accounts={accounts}
+               setAccounts={setAccounts}
+             />
+           )}
            {activeTab === 'calendar' && !isDev && <Calendar primaryColor={activeWorkspace.color} />}
            {activeTab === 'ads' && !isDev && <AdsWorkspace primaryColor={activeWorkspace.color} />}
            {activeTab === 'analytics' && !isDev && <Analytics primaryColorHex={primaryColorHex} analyticsData={analyticsData} onSaveInsight={saveAnalytics} />}

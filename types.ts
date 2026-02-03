@@ -21,6 +21,13 @@ export interface ActivityLog {
   report?: string;
 }
 
+export interface SocialAccount {
+  id: string;
+  name: string;
+  instagramUsername?: string;
+  tiktokUsername?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -94,6 +101,7 @@ export interface Comment {
 
 export interface ContentPlanItem {
   id: string;
+  creatorId?: string; // ID user pembuat konten
   status: 'Drafting' | 'Dijadwalkan' | 'Diposting' | 'Revisi' | 'Reschedule' | 'Dibatalkan';
   value: string;
   pillar: string;
