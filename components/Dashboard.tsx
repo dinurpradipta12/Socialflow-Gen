@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { TrendingUp, Users, MessageCircle, Share2, Calendar as CalendarIcon, ArrowUpRight, ArrowDownRight, Globe } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { THEME_COLORS } from '../constants';
@@ -31,67 +31,8 @@ const StatCard = ({ title, value, change, icon: Icon, colorSet }: any) => (
   </div>
 );
 
-interface RemoteMember {
-  id: string;
-  external_id: string;
-  email?: string;
-  status: 'pending' | 'active' | 'banned';
-  created_at: string;
-}
-
 const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => {
   const colorSet = THEME_COLORS[primaryColor] || THEME_COLORS.blue;
-
-  const [pendingMembers, setPendingMembers] = useState<RemoteMember[]>([]);
-
-  useEffect(() => {
-    const wsUrl = `${import.meta.env.VITE_WS_URL || 'ws://localhost:4000'}/?token=${import.meta.env.VITE_ADMIN_SECRET || 'change_me_to_secure_value'}`;
-    const ws = new WebSocket(wsUrl);
-    ws.onopen = () => console.log('ws connected');
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'member.created') {
-          setPendingMembers((s) => [msg.data as RemoteMember, ...s]);
-        } else if (msg.type === 'member.approved') {
-          setPendingMembers((s) => s.filter(m => m.id !== msg.data.id));
-        }
-      } catch (err) {
-        // ignore
-      }
-    };
-    ws.onclose = () => console.log('ws closed');
-    // fetch initial pending members
-    (async () => {
-      try {
-        const res = await fetch(`${import.meta.env.VITE_ADMIN_API || 'http://localhost:4000'}/api/admin/members?status=pending`, {
-          headers: { 'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'change_me_to_secure_value' }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setPendingMembers(data || []);
-        }
-      } catch (e) {
-        // ignore
-      }
-    })();
-
-    return () => ws.close();
-  }, []);
-
-  async function approveMember(id: string) {
-    try {
-      const res = await fetch(`${import.meta.env.VITE_ADMIN_API || 'http://localhost:4000'}/api/admin/members/${id}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-admin-secret': import.meta.env.VITE_ADMIN_SECRET || 'change_me_to_secure_value' }
-      });
-      if (res.ok) {
-        setPendingMembers((s) => s.filter(m => m.id !== id));
-      }
-    } catch (err) {
-      console.error('approve error', err);
-    }
-  }
 
   return (
     <div className="space-y-8 animate-slide pb-20">
@@ -141,24 +82,18 @@ const Dashboard: React.FC<{ primaryColor: ThemeColor }> = ({ primaryColor }) => 
         <div className="bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col">
           <h3 className="text-xl font-black text-gray-900 mb-8 tracking-tight">Cloud Queue</h3>
           <div className="flex-1 space-y-4 overflow-y-auto max-h-[400px] custom-scrollbar pr-2">
-            {pendingMembers.length === 0 ? (
-              <div className="text-sm text-gray-400">No pending members</div>
-            ) : (
-              pendingMembers.map((m) => (
-                <div key={m.id} className="flex items-center gap-4 p-5 rounded-3xl border border-gray-50 hover:bg-gray-50 transition-all">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${colorSet.bg} ${colorSet.text}`}>
-                    <CalendarIcon size={22} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-black text-gray-900 text-[12px] truncate tracking-tight">{m.email || m.external_id}</h4>
-                    <p className="text-[10px] text-gray-300 font-bold uppercase mt-1">Registered: {new Date(m.created_at).toLocaleString()}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => approveMember(m.id)} className="px-3 py-2 rounded-lg bg-emerald-500 text-white text-xs font-black">Approve</button>
-                  </div>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex items-center gap-4 p-5 rounded-3xl border border-gray-50 hover:bg-gray-50 hover:translate-x-2 transition-all cursor-pointer group">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${colorSet.bg} ${colorSet.text}`}>
+                  <CalendarIcon size={22} />
                 </div>
-              ))
-            )}
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-black text-gray-900 text-[12px] uppercase truncate tracking-tight">Node Sync Task #{i}</h4>
+                  <p className="text-[10px] text-gray-300 font-bold uppercase mt-1">Diproses oleh AI</p>
+                </div>
+                <ArrowUpRight size={18} className="text-gray-200 group-hover:text-blue-500 transition-colors" />
+              </div>
+            ))}
           </div>
         </div>
       </div>

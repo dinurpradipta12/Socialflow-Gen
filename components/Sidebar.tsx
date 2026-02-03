@@ -41,13 +41,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
 
   return (
     <div className={`fixed inset-y-0 left-0 w-72 bg-white border-r border-gray-100 flex flex-col z-[100] transition-transform duration-300 ease-in-out transform ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} shadow-2xl md:shadow-none`}>
-      <div className="p-4 sm:p-6 flex flex-col h-full">
+      <div className="p-6 flex flex-col h-full">
         {/* Logo Section */}
-        <div className="flex items-center justify-between mb-6 sm:mb-8">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="w-8 sm:w-10 h-8 sm:h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-black text-lg sm:text-xl shadow-lg">SF</div>
-            <div className="min-w-0">
-              <h1 className="font-black text-gray-900 text-xs sm:text-sm leading-tight tracking-tight truncate">Socialflow</h1>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-black text-xl shadow-lg">SF</div>
+            <div>
+              <h1 className="font-black text-gray-900 text-sm leading-tight tracking-tight">Socialflow</h1>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-0.5">Control Center</p>
             </div>
           </div>
