@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeColor, Workspace, User, Message, PostInsight, RegistrationRequest } from './types';
-import { MOCK_WORKSPACES, MOCK_USERS, DEV_CREDENTIALS } from './constants';
+import { MOCK_WORKSPACES, MOCK_USERS, DEV_CREDENTIALS, SUPABASE_CONFIG } from './constants';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Calendar from './components/Calendar';
@@ -60,6 +60,14 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Helper untuk mendapatkan config database (Prioritas: LocalStorage -> Default Constant)
+  const getDbConfig = () => {
+    return {
+      url: localStorage.getItem('sf_db_url') || SUPABASE_CONFIG.url,
+      key: localStorage.getItem('sf_db_key') || SUPABASE_CONFIG.key
+    };
+  };
+
   // --- SUBSCRIPTION GUARD ENGINE ---
   useEffect(() => {
     if (user && authState === 'authenticated') {
@@ -109,18 +117,16 @@ const App: React.FC = () => {
     setLoading(true);
     setLoginError(null);
 
-    // Get DB Config from LocalStorage
-    const dbUrl = localStorage.getItem('sf_db_url');
-    const dbKey = localStorage.getItem('sf_db_key');
+    const dbConfig = getDbConfig();
 
-    if (!dbUrl || !dbKey) {
-        setLoginError("Setup Database belum terdeteksi di perangkat ini. Hubungi Admin untuk konfigurasi.");
+    if (!dbConfig.url || !dbConfig.key) {
+        setLoginError("Konfigurasi Database Error. Hubungi Developer.");
         setLoading(false);
         return;
     }
 
     try {
-        await databaseService.createRegistration({ url: dbUrl, key: dbKey }, regData);
+        await databaseService.createRegistration(dbConfig, regData);
         setRegSuccess(true);
     } catch (error) {
         console.error(error);
@@ -153,13 +159,12 @@ const App: React.FC = () => {
     // 1. Siapkan User Variable
     let targetUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
     
-    // 2. SELALU Cek Database Cloud untuk mendapatkan data password terbaru
-    const dbUrl = localStorage.getItem('sf_db_url');
-    const dbKey = localStorage.getItem('sf_db_key');
+    // 2. SELALU Cek Database Cloud (Menggunakan Default Config)
+    const dbConfig = getDbConfig();
 
-    if (dbUrl && dbKey) {
+    if (dbConfig.url && dbConfig.key) {
         try {
-            const remoteUser = await databaseService.getUserByEmail({ url: dbUrl, key: dbKey }, cleanEmail);
+            const remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
             
             if (remoteUser) {
                 // Jika user ditemukan di cloud, kita prioritaskan data cloud (terutama Password & Status)
@@ -248,10 +253,9 @@ const App: React.FC = () => {
       setAllUsers(updatedAllUsers);
       
       // Sync update password back to DB
-      const dbUrl = localStorage.getItem('sf_db_url');
-      const dbKey = localStorage.getItem('sf_db_key');
-      if (dbUrl && dbKey) {
-         databaseService.upsertUser({ url: dbUrl, key: dbKey }, updatedUser);
+      const dbConfig = getDbConfig();
+      if (dbConfig.url && dbConfig.key) {
+         databaseService.upsertUser(dbConfig, updatedUser);
       }
       
       setUser(updatedUser);

@@ -5,6 +5,7 @@ import { Database, RefreshCw, Zap, CheckCircle, XCircle, ShieldCheck, Mail, Cloc
 import { mailService } from '../services/mailService';
 import { integrationService } from '../services/integrationService';
 import { databaseService } from '../services/databaseService';
+import { SUPABASE_CONFIG } from '../constants';
 
 interface DevPortalProps {
   primaryColorHex: string;
@@ -25,10 +26,10 @@ const DevPortal: React.FC<DevPortalProps> = ({
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<{[key: string]: 'idle' | 'sending' | 'sent' | 'error'}>({});
   
-  // Database & Connection States
+  // Database & Connection States (Auto-filled with Default Config)
   const [dbConfig, setDbConfig] = useState({
-    url: localStorage.getItem('sf_db_url') || '',
-    key: localStorage.getItem('sf_db_key') || ''
+    url: localStorage.getItem('sf_db_url') || SUPABASE_CONFIG.url,
+    key: localStorage.getItem('sf_db_key') || SUPABASE_CONFIG.key
   });
   const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [isDbSyncing, setIsDbSyncing] = useState(false);
@@ -45,6 +46,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
   }, [webhookUrl]);
 
   useEffect(() => {
+    // Only save to local storage if it differs from default, or just to keep state persistence
     localStorage.setItem('sf_db_url', dbConfig.url);
     localStorage.setItem('sf_db_key', dbConfig.key);
   }, [dbConfig]);

@@ -1,7 +1,13 @@
 
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
-export const APP_VERSION = '3.0.8'; 
+export const APP_VERSION = '3.0.9'; 
+
+// KONFIGURASI DATABASE GLOBAL (AUTO CONNECT)
+export const SUPABASE_CONFIG = {
+  url: "https://cphxdkiyoiupcicqehqw.supabase.co",
+  key: "sb_publishable_dEOcOz4erkIA9MiZeXzDPg_v92cLWcA"
+};
 
 export const THEME_COLORS = {
   blue: { bg: 'bg-blue-100', text: 'text-blue-500', border: 'border-blue-200', light: 'bg-blue-50', hover: 'hover:bg-blue-200' },
