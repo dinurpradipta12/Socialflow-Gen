@@ -250,8 +250,9 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
         setIsModalOpen(false);
         setEditingItem(null);
         setFormData({ title: '', platform: 'Instagram', value: 'Awareness', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', pic: '', scriptUrl: '', visualUrl: '', status: 'Menunggu Review', postDate: '' });
-    } catch (err) {
-        alert("Gagal menyimpan rencana konten. Periksa koneksi.");
+    } catch (err: any) {
+        // IMPROVED ERROR MESSAGE
+        alert(`Gagal menyimpan: ${err.message}. \n\nPastikan tabel 'content_plans' sudah dibuat di Supabase (Cek Tab DB Monitor di Dev Portal).`);
         console.error(err);
     } finally {
         setIsSaving(false);

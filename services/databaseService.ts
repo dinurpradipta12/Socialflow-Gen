@@ -20,13 +20,13 @@ export const databaseService = {
       user_id: user.id,
       full_name: user.name,
       email: user.email,
-      password: user.password,
+      password: user.password, // Ensure password is sent
       role: user.role,
       whatsapp: user.whatsapp || null,
       status: user.status || 'active',
       subscription_expiry: user.subscriptionExpiry || null,
       performance_score: user.performanceScore || 0,
-      workspace_id: user.workspaceId || null, // Link ke Workspace
+      workspace_id: user.workspaceId || null, 
       last_updated: new Date().toISOString()
     };
 
@@ -321,7 +321,7 @@ export const databaseService = {
    * SHARED DATA: Simpan Content Plan
    */
   upsertContentPlan: async (config: { url: string; key: string }, item: ContentPlanItem) => {
-    if (!config.url || !config.key) return;
+    if (!config.url || !config.key) throw new Error("Konfigurasi database belum diatur.");
 
     const baseUrl = config.url.replace(/\/$/, "");
     const endpoint = `${baseUrl}/rest/v1/content_plans`;
@@ -357,7 +357,10 @@ export const databaseService = {
         body: JSON.stringify(payload)
     });
 
-    if (!response.ok) throw new Error("Gagal menyimpan plan");
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(`DB Error (${response.status}): ${err.message || 'Tabel content_plans mungkin belum dibuat di Supabase.'}`);
+    }
   },
 
   /**
@@ -466,6 +469,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 );
 
 -- TABLE 4: CONTENT PLANS (SHARED DATA)
+-- Jalankan ini jika Anda mendapatkan error saat menyimpan plan
 CREATE TABLE IF NOT EXISTS content_plans (
     id VARCHAR(255) PRIMARY KEY,
     workspace_id VARCHAR(255),
