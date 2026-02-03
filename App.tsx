@@ -61,7 +61,6 @@ const App: React.FC = () => {
   });
 
   // Helper untuk mendapatkan config database
-  // SELALU gunakan SUPABASE_CONFIG jika localStorage kosong
   const getDbConfig = () => {
     return {
       url: localStorage.getItem('sf_db_url') || SUPABASE_CONFIG.url,
@@ -157,58 +156,56 @@ const App: React.FC = () => {
         return;
     }
 
-    // 2. REAL-TIME DB CHECK (Primary Auth Method)
-    // Kita tidak mengandalkan local storage untuk validasi password agar selalu sinkron.
+    // 2. REAL-TIME DB VERIFICATION
     const dbConfig = getDbConfig();
-    let remoteUser: User | null = null;
-    let authSuccessful = false;
-
-    if (dbConfig.url && dbConfig.key) {
-        try {
-            console.log("Attempting login via Supabase...");
-            remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
-            
-            if (remoteUser) {
-                console.log("User found in DB:", remoteUser.name);
-                // Validasi Password dari DB
-                const dbPassword = remoteUser.password || 'Social123';
-                if (dbPassword === cleanPassword) {
-                    authSuccessful = true;
-                } else {
-                    setLoginError("Security Code (Password) salah.");
-                    setLoading(false);
-                    return;
-                }
-            } else {
-                 // User tidak ditemukan di DB Supabase
-                 // Fallback ke Local Storage (Hanya jika benar-benar offline/legacy)
-            }
-        } catch (err) {
-            console.error("DB Login Error:", err);
-            // Jika koneksi error, kita coba fallback ke local storage di bawah
-        }
+    
+    // Pastikan config ada
+    if (!dbConfig.url || !dbConfig.key) {
+        setLoginError("Koneksi Database Putus. Hubungi Admin.");
+        setLoading(false);
+        return;
     }
 
-    // 3. Finalize Login
-    if (authSuccessful && remoteUser) {
-        // Update Local Storage dengan data terbaru dari Cloud
-        const updatedAllUsers = [...allUsers];
-        const index = updatedAllUsers.findIndex(u => u.email === remoteUser!.email);
-        if (index !== -1) {
-            updatedAllUsers[index] = remoteUser;
-        } else {
-            updatedAllUsers.push(remoteUser);
-        }
-        setAllUsers(updatedAllUsers);
+    try {
+        // Fetch user langsung dari Supabase
+        const remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
 
-        // Check Account Status
-        if (remoteUser.status === 'suspended') {
-            setLoginError("Akun ini telah ditangguhkan. Hubungi Admin.");
+        if (!remoteUser) {
+            setLoginError("Email tidak ditemukan di database.");
             setLoading(false);
             return;
         }
 
-        // Check Password Change Requirement
+        // Cek Password (Priority: Password dari DB -> Default 'Social123')
+        // Ini mengatasi masalah "Password Salah" meski sudah approve.
+        // User dari DB pasti punya field password yang terbaru.
+        const dbPassword = remoteUser.password || 'Social123';
+        
+        if (cleanPassword !== dbPassword) {
+             setLoginError("Password salah. Coba 'Social123' atau password yang Anda daftarkan.");
+             setLoading(false);
+             return;
+        }
+
+        // --- LOGIN BERHASIL ---
+        
+        // 1. Update State Global Users (Sinkronisasi Data Lokal)
+        setAllUsers(prev => {
+            const exists = prev.find(u => u.id === remoteUser.id);
+            if (exists) {
+                return prev.map(u => u.id === remoteUser.id ? remoteUser : u);
+            }
+            return [...prev, remoteUser];
+        });
+
+        // 2. Cek Status Akun
+        if (remoteUser.status === 'suspended') {
+            setLoginError("Akun ditangguhkan. Hubungi Support.");
+            setLoading(false);
+            return;
+        }
+
+        // 3. Cek Wajib Ganti Password
         if (remoteUser.requiresPasswordChange) {
             setTempLoginUser(remoteUser);
             setIsChangePasswordOpen(true);
@@ -216,37 +213,27 @@ const App: React.FC = () => {
             return;
         }
 
-        // Success Login
+        // 4. Set Session & Masuk
         setUser(remoteUser);
         localStorage.setItem('sf_session_user', JSON.stringify(remoteUser));
-        
-        // Cek Subscription
+
+        // 5. Cek Subscription
         const today = new Date();
         if (remoteUser.subscriptionExpiry && today > new Date(remoteUser.subscriptionExpiry) && remoteUser.role !== 'developer') {
             setAuthState('expired');
         } else {
             setAuthState('authenticated');
         }
-        setLoading(false);
-        return;
-    }
 
-    // 4. Fallback Local Storage (Jika DB Check gagal koneksi atau user belum ada di DB)
-    // Ini hanya jalan jika logic di atas tidak return.
-    const localUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail);
-    if (localUser && localUser.password === cleanPassword) {
-        // Local match found
-        setUser(localUser);
-        localStorage.setItem('sf_session_user', JSON.stringify(localUser));
-        setAuthState('authenticated');
-    } else if (!loginError) {
-        setLoginError("Email tidak terdaftar atau password salah.");
+    } catch (err) {
+        console.error("Login Error:", err);
+        setLoginError("Gagal terhubung ke server. Periksa internet Anda.");
+    } finally {
+        setLoading(false);
     }
-    
-    setLoading(false);
   };
 
-  const handleFinalizePasswordChange = (e: React.FormEvent) => {
+  const handleFinalizePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       alert("Konfirmasi password tidak cocok!");
@@ -265,13 +252,14 @@ const App: React.FC = () => {
          status: 'active'
       };
 
+      // Update Local
       const updatedAllUsers = allUsers.map(u => u.id === tempLoginUser.id ? updatedUser : u);
       setAllUsers(updatedAllUsers);
       
-      // Sync update password back to DB
+      // Update Database Real-time
       const dbConfig = getDbConfig();
       if (dbConfig.url && dbConfig.key) {
-         databaseService.upsertUser(dbConfig, updatedUser);
+         await databaseService.upsertUser(dbConfig, updatedUser);
       }
       
       setUser(updatedUser);

@@ -76,17 +76,18 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
   // Sync displayed users with prop users when on other tabs, 
   // but if on 'users' tab and connected, we might want to show DB users (handled in checkDbConnection/Refresh)
+  // [FIX] Added activeSubTab to dependency to refresh data when tab is switched
   useEffect(() => {
-    if (activeSubTab !== 'users') {
-        setDisplayedUsers(users);
-    } else if (dbStatus === 'online') {
-        // If switching to users tab and online, refresh data quietly
+    if (activeSubTab === 'users' && dbStatus === 'online') {
+        // If switching to users tab and online, refresh data from DB
         databaseService.getAllUsers(dbConfig).then(u => {
             setDisplayedUsers(u);
             setUsers(u);
         }).catch(console.error);
+    } else if (activeSubTab !== 'users') {
+        setDisplayedUsers(users);
     }
-  }, [users, activeSubTab]);
+  }, [users, activeSubTab, dbStatus]);
 
   const checkDbConnection = async () => {
     setDbStatus('checking');
