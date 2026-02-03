@@ -138,69 +138,91 @@ const App: React.FC = () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    // 1. Cek User di Local State (Priority)
-    let foundUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
-    const isDevLogin = cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password;
-
-    // 2. Jika tidak ada di local & bukan dev, Cek ke Supabase Cloud
-    if (!foundUser && !isDevLogin) {
-       const dbUrl = localStorage.getItem('sf_db_url');
-       const dbKey = localStorage.getItem('sf_db_key');
-
-       if (dbUrl && dbKey) {
-          try {
-             const remoteUser = await databaseService.getUserByEmail({ url: dbUrl, key: dbKey }, cleanEmail);
-             if (remoteUser) {
-                // User ditemukan di Cloud, simpan ke Local Storage untuk sesi berikutnya
-                foundUser = remoteUser;
-                setAllUsers(prev => {
-                   // Pastikan tidak duplikat
-                   if (prev.some(u => u.id === remoteUser.id)) return prev;
-                   return [...prev, remoteUser];
-                });
-             }
-          } catch (err) {
-             console.error("Cloud Login Check Failed:", err);
-          }
-       }
-    }
-
-    // 3. Validasi Login
-    setTimeout(() => {
-      if (!foundUser && !isDevLogin) {
-        setLoginError("Email belum terdaftar dalam sistem (Local/Cloud).");
+    // Developer Login Bypass
+    if (cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password) {
+        const devUser = MOCK_USERS.find(u => u.role === 'developer');
+        if (devUser) {
+            setUser(devUser);
+            localStorage.setItem('sf_session_user', JSON.stringify(devUser));
+            setAuthState('authenticated');
+        }
         setLoading(false);
         return;
-      }
+    }
 
-      const isPasswordCorrect = isDevLogin || (foundUser && (foundUser.password === cleanPassword || (!foundUser.password && cleanPassword === 'Social123')));
-      
-      if (isPasswordCorrect) {
-        const targetUser = isDevLogin ? MOCK_USERS.find(u => u.role === 'developer') : foundUser;
+    // 1. Siapkan User Variable
+    let targetUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
+    
+    // 2. SELALU Cek Database Cloud untuk mendapatkan data password terbaru
+    const dbUrl = localStorage.getItem('sf_db_url');
+    const dbKey = localStorage.getItem('sf_db_key');
 
-        if (targetUser && targetUser.requiresPasswordChange) {
-           setTempLoginUser(targetUser);
-           setIsChangePasswordOpen(true);
-           setLoading(false);
-           return;
-        }
-
-        if (targetUser) {
-            setUser(targetUser);
-            localStorage.setItem('sf_session_user', JSON.stringify(targetUser));
+    if (dbUrl && dbKey) {
+        try {
+            const remoteUser = await databaseService.getUserByEmail({ url: dbUrl, key: dbKey }, cleanEmail);
             
-            const today = new Date();
-            if (targetUser.subscriptionExpiry && today > new Date(targetUser.subscriptionExpiry) && targetUser.role !== 'developer') {
-              setAuthState('expired');
-            } else {
-              setAuthState('authenticated');
+            if (remoteUser) {
+                // Jika user ditemukan di cloud, kita prioritaskan data cloud (terutama Password & Status)
+                if (targetUser) {
+                    // Update user lokal dengan data terbaru dari cloud
+                    targetUser = { ...targetUser, ...remoteUser };
+                    
+                    // Update state global agar data lokal tersinkronisasi
+                    setAllUsers(prev => prev.map(u => u.email === cleanEmail ? targetUser! : u));
+                } else {
+                    // Jika user baru login pertama kali di device ini
+                    targetUser = remoteUser;
+                    setAllUsers(prev => [...prev, remoteUser]);
+                }
             }
+        } catch (err) {
+            console.error("Gagal sinkronisasi user cloud:", err);
+            // Lanjut menggunakan data local storage jika ada
         }
-      } else {
-        setLoginError("Security Code tidak valid. Silakan coba lagi.");
-      }
-      setLoading(false);
-    }, 1000);
+    }
+
+    // 3. Validasi Password
+    setTimeout(() => {
+        if (!targetUser) {
+            setLoginError("Email belum terdaftar dalam sistem.");
+            setLoading(false);
+            return;
+        }
+
+        // Logic cek password: 
+        // 1. Cek match persis
+        // 2. Jika password di DB kosong/null, gunakan default 'Social123'
+        const dbPassword = targetUser.password || 'Social123';
+        const isPasswordCorrect = dbPassword === cleanPassword;
+
+        if (isPasswordCorrect) {
+            // Cek Status Akun
+            if (targetUser.status === 'suspended') {
+                 setLoginError("Akun ini telah ditangguhkan. Hubungi Admin.");
+                 setLoading(false);
+                 return;
+            }
+
+            if (targetUser.requiresPasswordChange) {
+                setTempLoginUser(targetUser);
+                setIsChangePasswordOpen(true);
+            } else {
+                setUser(targetUser);
+                localStorage.setItem('sf_session_user', JSON.stringify(targetUser));
+                
+                // Cek Subscription
+                const today = new Date();
+                if (targetUser.subscriptionExpiry && today > new Date(targetUser.subscriptionExpiry) && targetUser.role !== 'developer') {
+                    setAuthState('expired');
+                } else {
+                    setAuthState('authenticated');
+                }
+            }
+        } else {
+            setLoginError("Security Code (Password) salah.");
+        }
+        setLoading(false);
+    }, 800);
   };
 
   const handleFinalizePasswordChange = (e: React.FormEvent) => {
