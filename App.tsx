@@ -116,6 +116,43 @@ const App: React.FC = () => {
       localStorage.setItem('sf_workspaces_db', JSON.stringify(workspaces));
   }, [workspaces]);
 
+  // DATA SYNCING LOGIC
+  useEffect(() => {
+      // If logged in and has workspace, try to fetch fresh workspace data from cloud
+      const syncData = async () => {
+          if (user && user.workspaceId && authState === 'authenticated') {
+              const dbConfig = getDbConfig();
+              if (dbConfig.url && dbConfig.key) {
+                  try {
+                      // Fetch Workspace Details
+                      const freshWs = await databaseService.getWorkspaceById(dbConfig, user.workspaceId);
+                      if (freshWs) {
+                          // Fetch Members of this Workspace
+                          const allDbUsers = await databaseService.getAllUsers(dbConfig);
+                          const members = allDbUsers.filter(u => u.workspaceId === user.workspaceId);
+                          freshWs.members = members;
+                          
+                          setWorkspaces(prev => {
+                              const exists = prev.find(w => w.id === freshWs.id);
+                              return exists ? prev.map(w => w.id === freshWs.id ? freshWs : w) : [...prev, freshWs];
+                          });
+                          
+                          // Also update allUsers global state
+                          setAllUsers(prev => {
+                              // Merge remote users with local mock users if needed, or just use remote
+                              return allDbUsers; 
+                          });
+                      }
+                  } catch (e) {
+                      console.error("Sync Error", e);
+                  }
+              }
+          }
+      };
+      
+      syncData();
+  }, [user, authState]);
+
   // Helper: Get Active Workspace based on current user
   const activeWorkspace = workspaces.find(w => w.id === user?.workspaceId);
 
@@ -156,12 +193,19 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreateWorkspace = (e: React.FormEvent) => {
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user) return;
+      setLoading(true);
+
+      const dbConfig = getDbConfig();
+      if (!dbConfig.url || !dbConfig.key) {
+          alert("Koneksi Database bermasalah. Hubungi admin.");
+          setLoading(false);
+          return;
+      }
 
       const newWsId = `WS-${Date.now()}`;
-      // Generate Simple Code: 2 letters + 4 random alphanumeric (e.g., AR-X9B2)
       const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
       const newInviteCode = `AR-${randomSuffix}`;
       
@@ -183,58 +227,91 @@ const App: React.FC = () => {
       
       newWs.members = [updatedUser];
 
-      // Update States
-      const updatedWorkspaces = [...workspaces, newWs];
-      const updatedUsers = allUsers.map(u => u.id === user.id ? updatedUser : u);
+      try {
+          // 1. Create Workspace in DB
+          await databaseService.createWorkspace(dbConfig, newWs);
+          
+          // 2. Update User in DB (Link to Workspace)
+          await databaseService.upsertUser(dbConfig, updatedUser);
 
-      setWorkspaces(updatedWorkspaces);
-      setAllUsers(updatedUsers);
-      setUser(updatedUser);
-      localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
-      
-      // Update DB (Optional based on your mock structure, usually you'd upsert user)
-      const dbConfig = getDbConfig();
-      databaseService.upsertUser(dbConfig, updatedUser);
-
-      setSetupStep('choice'); // Reset
+          // 3. Update Local State
+          setWorkspaces([...workspaces, newWs]);
+          setUser(updatedUser);
+          localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
+          setSetupStep('choice'); 
+          
+      } catch (err) {
+          console.error(err);
+          alert("Gagal membuat workspace di Cloud Database. Coba lagi.");
+      } finally {
+          setLoading(false);
+      }
   };
 
-  const handleJoinByCode = (e: React.FormEvent) => {
+  const handleJoinByCode = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!user) return;
+      setLoading(true);
 
       const code = workspaceCodeInput.trim().toUpperCase();
-      const targetWs = workspaces.find(w => w.inviteCode === code);
+      const dbConfig = getDbConfig();
 
-      if (!targetWs) {
-          alert("Kode Workspace tidak ditemukan!");
+      if (!dbConfig.url || !dbConfig.key) {
+          alert("Koneksi Database tidak tersedia.");
+          setLoading(false);
           return;
       }
 
-      // Check if already member
-      if (targetWs.members.some(m => m.email === user.email)) {
-          alert("Anda sudah menjadi member di workspace ini.");
-          return;
+      try {
+          // 1. Search Code in DB
+          const targetWs = await databaseService.getWorkspaceByCode(dbConfig, code);
+
+          if (!targetWs) {
+              alert("Kode Workspace tidak ditemukan di Database!");
+              setLoading(false);
+              return;
+          }
+
+          // 2. Check if already member (fetch latest users first to be sure)
+          const allDbUsers = await databaseService.getAllUsers(dbConfig);
+          const existingMember = allDbUsers.find(u => u.workspaceId === targetWs.id && u.email === user.email);
+
+          if (existingMember) {
+              alert(`Anda sudah menjadi member di ${targetWs.name}. Mengalihkan...`);
+              switchProfile(existingMember);
+              return;
+          }
+
+          // 3. Create NEW Profile for this Workspace
+          const newUserProfile: User = {
+              ...user,
+              id: `U-${Date.now()}`, // Create NEW profile ID unique for this workspace
+              workspaceId: targetWs.id,
+              role: 'viewer',
+              jobdesk: 'Member',
+              // Reset some fields
+              kpi: [],
+              activityLogs: [],
+              performanceScore: 0
+          };
+
+          // 4. Save New Profile to DB
+          await databaseService.upsertUser(dbConfig, newUserProfile);
+
+          // 5. Update Local State & Switch
+          const updatedWs = { ...targetWs, members: [...targetWs.members, newUserProfile] };
+          setWorkspaces([...workspaces, updatedWs]);
+          setAllUsers([...allUsers, newUserProfile]);
+          
+          alert(`Berhasil bergabung ke ${targetWs.name}!`);
+          switchProfile(newUserProfile);
+
+      } catch (err) {
+          console.error(err);
+          alert("Terjadi kesalahan saat bergabung.");
+      } finally {
+          setLoading(false);
       }
-
-      // Logic: Update current user to belong to this workspace
-      // Note: In a real multi-tenancy, we might create a link. Here we update the user object.
-      
-      const updatedUser: User = {
-          ...user,
-          id: `U-${Date.now()}`, // Create NEW profile ID for this workspace context (Multi-profile architecture)
-          workspaceId: targetWs.id,
-          role: 'viewer',
-          jobdesk: 'Member'
-      };
-
-      const updatedWs = { ...targetWs, members: [...targetWs.members, updatedUser] };
-      
-      setWorkspaces(workspaces.map(w => w.id === targetWs.id ? updatedWs : w));
-      setAllUsers([...allUsers, updatedUser]);
-      
-      // Switch to new profile
-      switchProfile(updatedUser);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -260,16 +337,19 @@ const App: React.FC = () => {
     // DB Verification
     const dbConfig = getDbConfig();
     try {
-        let loggedInUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail && (u.password === cleanPassword || cleanPassword === 'Social123'));
+        let loggedInUser: User | null = null;
         
-        // If not in local, try remote (simulate sync)
-        if (!loggedInUser && dbConfig.url && dbConfig.key) {
+        // 1. Try Remote First
+        if (dbConfig.url && dbConfig.key) {
              const remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
              if (remoteUser && (remoteUser.password === cleanPassword || cleanPassword === 'Social123')) {
                  loggedInUser = remoteUser;
-                 // Add to local cache if new
-                 setAllUsers(prev => [...prev, remoteUser]);
              }
+        }
+
+        // 2. Fallback Local
+        if (!loggedInUser) {
+            loggedInUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail && (u.password === cleanPassword || cleanPassword === 'Social123')) || null;
         }
 
         if (loggedInUser) {
@@ -281,6 +361,11 @@ const App: React.FC = () => {
                 setUser(loggedInUser);
                 localStorage.setItem('sf_session_user', JSON.stringify(loggedInUser));
                 setAuthState('authenticated');
+                
+                // If user has a workspace, trigger refresh
+                if (loggedInUser.workspaceId) {
+                    // Logic handled in useEffect
+                }
             }
         } else {
             setLoginError("Email atau password salah.");
@@ -415,7 +500,9 @@ const App: React.FC = () => {
                             />
                             <div className="flex gap-2">
                                 <button type="button" onClick={() => setSetupStep('choice')} className="flex-1 py-3 text-gray-400 font-bold text-xs">Batal</button>
-                                <button type="submit" className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg">Gabung</button>
+                                <button type="submit" disabled={loading} className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex justify-center items-center gap-2">
+                                    {loading && <Loader2 size={12} className="animate-spin" />} Gabung
+                                </button>
                             </div>
                         </form>
                     ) : (
@@ -454,7 +541,9 @@ const App: React.FC = () => {
                             </div>
                             <div className="flex gap-2">
                                 <button type="button" onClick={() => setSetupStep('choice')} className="flex-1 py-3 text-gray-500 font-bold text-xs">Batal</button>
-                                <button type="submit" className="flex-[2] py-3 bg-white text-gray-900 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg">Buat Sekarang</button>
+                                <button type="submit" disabled={loading} className="flex-[2] py-3 bg-white text-gray-900 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex justify-center items-center gap-2">
+                                    {loading && <Loader2 size={12} className="animate-spin text-gray-900" />} Buat Sekarang
+                                </button>
                             </div>
                         </form>
                     ) : (
@@ -545,8 +634,8 @@ const App: React.FC = () => {
                         className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-black text-center text-xl tracking-widest uppercase placeholder:text-gray-300"
                         placeholder="AR-XXXX"
                       />
-                      <button type="submit" className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl shadow-xl active:scale-95 transition-all">
-                          Gabung Sekarang
+                      <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl shadow-xl active:scale-95 transition-all flex justify-center items-center gap-2">
+                          {loading && <Loader2 size={12} className="animate-spin" />} Gabung Sekarang
                       </button>
                   </form>
               </div>

@@ -1,5 +1,5 @@
 
-import { User, RegistrationRequest } from '../types';
+import { User, RegistrationRequest, Workspace } from '../types';
 
 /**
  * DATABASE SERVICE (Supabase/PostgreSQL Bridge)
@@ -20,12 +20,13 @@ export const databaseService = {
       user_id: user.id,
       full_name: user.name,
       email: user.email,
-      password: user.password, // Added password sync
+      password: user.password,
       role: user.role,
       whatsapp: user.whatsapp || null,
       status: user.status || 'active',
       subscription_expiry: user.subscriptionExpiry || null,
       performance_score: user.performanceScore || 0,
+      workspace_id: user.workspaceId || null, // Link ke Workspace
       last_updated: new Date().toISOString()
     };
 
@@ -72,7 +73,6 @@ export const databaseService = {
       
       const data = await response.json();
       
-      // Mapping DB Row to Application User Object
       return data.map((dbUser: any) => ({
         id: dbUser.user_id,
         name: dbUser.full_name,
@@ -83,7 +83,7 @@ export const databaseService = {
         status: dbUser.status,
         subscriptionExpiry: dbUser.subscription_expiry,
         performanceScore: dbUser.performance_score,
-        // Default properties that might not be in DB yet
+        workspaceId: dbUser.workspace_id, // Map workspace_id
         permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
         isSubscribed: true,
         jobdesk: 'Member',
@@ -105,7 +105,6 @@ export const databaseService = {
     if (!config.url || !config.key) return null;
 
     const baseUrl = config.url.replace(/\/$/, "");
-    // Query: SELECT * FROM users WHERE email = email LIMIT 1
     const endpoint = `${baseUrl}/rest/v1/users?email=eq.${encodeURIComponent(email)}&select=*&limit=1`;
 
     try {
@@ -123,18 +122,18 @@ export const databaseService = {
       const data = await response.json();
       if (data && data.length > 0) {
         const dbUser = data[0];
-        // Map DB Snake_case to App CamelCase
         return {
             id: dbUser.user_id,
             name: dbUser.full_name,
             email: dbUser.email,
-            password: dbUser.password || 'Social123', // Fallback password
+            password: dbUser.password || 'Social123',
             role: dbUser.role as any,
             whatsapp: dbUser.whatsapp,
             status: dbUser.status,
             subscriptionExpiry: dbUser.subscription_expiry,
             performanceScore: dbUser.performance_score,
-            permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true }, // Default permissions
+            workspaceId: dbUser.workspace_id,
+            permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
             isSubscribed: true,
             jobdesk: 'Member',
             kpi: [],
@@ -147,6 +146,116 @@ export const databaseService = {
       console.error("Get User Error:", error);
       return null;
     }
+  },
+
+  /**
+   * WORKSPACE: Membuat Workspace Baru di Database
+   */
+  createWorkspace: async (config: { url: string; key: string }, ws: Workspace) => {
+    if (!config.url || !config.key) throw new Error("Database Config Missing");
+
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/workspaces`;
+
+    const payload = {
+        id: ws.id,
+        name: ws.name,
+        color: ws.color,
+        invite_code: ws.inviteCode,
+        owner_id: ws.ownerId,
+        created_at: new Date().toISOString()
+    };
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'apikey': config.key,
+            'Authorization': `Bearer ${config.key}`,
+            'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error("Gagal membuat workspace di DB");
+    return true;
+  },
+
+  /**
+   * WORKSPACE: Mencari Workspace berdasarkan Kode Invite
+   */
+  getWorkspaceByCode: async (config: { url: string; key: string }, code: string): Promise<Workspace | null> => {
+    if (!config.url || !config.key) return null;
+
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/workspaces?invite_code=eq.${encodeURIComponent(code)}&select=*&limit=1`;
+
+    try {
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+                'apikey': config.key,
+                'Authorization': `Bearer ${config.key}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) return null;
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+            const w = data[0];
+            return {
+                id: w.id,
+                name: w.name,
+                color: w.color,
+                inviteCode: w.invite_code,
+                ownerId: w.owner_id,
+                members: [] // Members akan di-fetch terpisah/realtime via users table
+            };
+        }
+        return null;
+    } catch (e) {
+        console.error("Get Workspace Error", e);
+        return null;
+    }
+  },
+
+  /**
+   * WORKSPACE: Mengambil Workspace Detail berdasarkan ID
+   */
+  getWorkspaceById: async (config: { url: string; key: string }, id: string): Promise<Workspace | null> => {
+    if (!config.url || !config.key) return null;
+    
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/workspaces?id=eq.${encodeURIComponent(id)}&select=*&limit=1`;
+    
+    try {
+        const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+                'apikey': config.key,
+                'Authorization': `Bearer ${config.key}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) return null;
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+            const w = data[0];
+            return {
+                id: w.id,
+                name: w.name,
+                color: w.color,
+                inviteCode: w.invite_code,
+                ownerId: w.owner_id,
+                members: [] 
+            };
+        }
+        return null;
+    } catch(e) { return null; }
   },
 
   /**
@@ -188,15 +297,10 @@ export const databaseService = {
     }
   },
 
-  /**
-   * Mengambil data registrasi yang sudah di-APPROVE oleh aplikasi monitoring
-   */
   fetchApprovedRegistrations: async (config: { url: string; key: string }) => {
     if (!config.url || !config.key) return [];
-
     const baseUrl = config.url.replace(/\/$/, "");
     const endpoint = `${baseUrl}/rest/v1/registrations?status=eq.approved&select=*`;
-
     try {
       const response = await fetch(endpoint, {
         method: 'GET',
@@ -205,7 +309,6 @@ export const databaseService = {
           'Authorization': `Bearer ${config.key}`,
         }
       });
-
       if (!response.ok) return [];
       const data = await response.json();
       return data;
@@ -215,22 +318,20 @@ export const databaseService = {
     }
   },
 
-  /**
-   * Mendapatkan SQL Schema untuk setup awal (Update V4 - Added Password to Users Table)
-   */
   getSchemaSQL: () => {
     return `
--- TABLE 1: USERS (Update: Added password column)
+-- TABLE 1: USERS
 CREATE TABLE IF NOT EXISTS users (
     user_id VARCHAR(255) PRIMARY KEY,
     full_name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255), -- Field untuk login
+    email VARCHAR(255) NOT NULL,
+    password VARCHAR(255),
     role VARCHAR(50) DEFAULT 'viewer',
     whatsapp VARCHAR(50),
     status VARCHAR(50) DEFAULT 'active',
     subscription_expiry DATE,
     performance_score INTEGER DEFAULT 0,
+    workspace_id VARCHAR(255), -- Link ke Workspace
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -246,9 +347,19 @@ CREATE TABLE IF NOT EXISTS registrations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- TABLE 3: WORKSPACES (New for Code Sharing)
+CREATE TABLE IF NOT EXISTS workspaces (
+    id VARCHAR(255) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    color VARCHAR(50),
+    invite_code VARCHAR(50) UNIQUE NOT NULL,
+    owner_id VARCHAR(255),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_regs_status ON registrations(status);
+CREATE INDEX IF NOT EXISTS idx_ws_code ON workspaces(invite_code);
     `.trim();
   }
 };
