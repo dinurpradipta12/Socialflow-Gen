@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, RegistrationRequest } from '../types';
-import { Database, RefreshCw, Zap, CheckCircle, XCircle, ShieldCheck, Mail, Clock, Globe, Download, Cloud, Radio, UserPlus, Phone, Calendar, AlertCircle, Key, RefreshCcw, Send, Trash2, Edit, ChevronRight, UserCheck, Loader2, Link as LinkIcon, FileSpreadsheet, Share2, Server, Copy, Terminal } from 'lucide-react';
+import { Database, RefreshCw, Zap, CheckCircle, XCircle, ShieldCheck, Mail, Clock, Globe, Download, Cloud, Radio, UserPlus, Phone, Calendar, AlertCircle, Key, RefreshCcw, Send, Trash2, Edit, ChevronRight, UserCheck, Loader2, Link as LinkIcon, FileSpreadsheet, Share2, Server, Copy, Terminal, CloudLightning, ArrowDownToLine } from 'lucide-react';
 import { mailService } from '../services/mailService';
 import { integrationService } from '../services/integrationService';
 import { databaseService } from '../services/databaseService';
@@ -35,6 +35,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
     key: localStorage.getItem('sf_db_key') || ''
   });
   const [isDbSyncing, setIsDbSyncing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
 
   useEffect(() => {
@@ -94,6 +95,67 @@ const DevPortal: React.FC<DevPortalProps> = ({
     }
   };
 
+  const handlePullApprovedRegistrations = async () => {
+    if(!dbConfig.url || !dbConfig.key) return alert("Konfigurasi database belum lengkap di tab DB Monitor.");
+    
+    setIsPulling(true);
+    try {
+      const approvedRegs = await databaseService.fetchApprovedRegistrations(dbConfig);
+      
+      if (approvedRegs.length === 0) {
+        alert("Tidak ada data registrasi berstatus 'approved' baru di database.");
+        setIsPulling(false);
+        return;
+      }
+
+      let importedCount = 0;
+      const newUsers = [...users];
+
+      for (const reg of approvedRegs) {
+        // Cek duplikasi
+        if (newUsers.some(u => u.email === reg.email)) continue;
+
+        const defaultExpiry = new Date();
+        defaultExpiry.setMonth(defaultExpiry.getMonth() + 1);
+
+        const newUser: User = {
+          id: `U-IMPORT-${reg.id}`,
+          name: reg.name,
+          email: reg.email,
+          password: 'Social123',
+          whatsapp: reg.whatsapp,
+          role: 'viewer',
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
+          permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
+          isSubscribed: true,
+          activationDate: new Date().toISOString().split('T')[0],
+          subscriptionExpiry: defaultExpiry.toISOString().split('T')[0],
+          status: 'pending', // Pending login
+          jobdesk: 'New Member',
+          kpi: [],
+          activityLogs: [],
+          performanceScore: 0,
+          requiresPasswordChange: true
+        };
+        
+        newUsers.push(newUser);
+        importedCount++;
+        
+        // Auto Sync User back to Users Table (to confirm existence)
+        await databaseService.upsertUser(dbConfig, newUser);
+      }
+
+      setUsers(newUsers);
+      alert(`Berhasil mengimpor ${importedCount} user baru dari Database Registrasi.`);
+
+    } catch (e) {
+      console.error(e);
+      alert("Gagal menarik data.");
+    } finally {
+      setIsPulling(false);
+    }
+  };
+
   const handleManualRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!manualUser.email || !manualUser.expiryDate) {
@@ -128,15 +190,12 @@ const DevPortal: React.FC<DevPortalProps> = ({
       requiresPasswordChange: true
     };
 
-    // 1. Simpan ke database lokal
     setUsers([...users, newUser]);
 
-    // 2. Auto Sync ke Database External (Jika dikonfigurasi)
     if (dbConfig.url && dbConfig.key) {
       await syncToDatabase(newUser);
     }
 
-    // 3. Dispatch email
     const emailSuccess = await dispatchCloudEmail(newUser);
 
     if (emailSuccess) {
@@ -242,13 +301,33 @@ const DevPortal: React.FC<DevPortalProps> = ({
       </div>
 
       {activeSubTab === 'manual' && (
-        <section className="max-w-4xl mx-auto animate-slide">
+        <section className="max-w-4xl mx-auto animate-slide space-y-8">
+           {/* IMPORT FROM MONITORING */}
+           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-10 rounded-[3.5rem] border border-blue-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="flex items-center gap-6">
+                 <div className="p-4 bg-white text-blue-500 rounded-3xl shadow-sm"><CloudLightning size={32}/></div>
+                 <div>
+                    <h2 className="text-xl font-black text-gray-900">Sync Approved Users</h2>
+                    <p className="text-xs text-gray-500 font-medium mt-1 max-w-sm">Tarik data pendaftaran yang sudah di-<b>APPROVE</b> oleh Admin Monitoring dari Database Supabase.</p>
+                 </div>
+              </div>
+              <button 
+                onClick={handlePullApprovedRegistrations}
+                disabled={isPulling}
+                className="px-8 py-5 bg-blue-500 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-500/20 flex items-center gap-3 active:scale-95 transition-all"
+              >
+                 {isPulling ? <Loader2 size={16} className="animate-spin" /> : <ArrowDownToLine size={16} />}
+                 {isPulling ? 'Checking DB...' : 'Pull Approved Data'}
+              </button>
+           </div>
+
+           {/* Manual Form */}
            <div className="bg-white p-10 md:p-14 rounded-[3.5rem] border border-gray-100 shadow-xl space-y-10">
               <div className="flex items-center gap-4 border-b border-gray-100 pb-8">
-                 <div className="p-4 bg-blue-50 text-blue-500 rounded-3xl"><UserPlus size={32}/></div>
+                 <div className="p-4 bg-gray-50 text-gray-500 rounded-3xl"><UserPlus size={32}/></div>
                  <div>
                     <h2 className="text-2xl font-black text-gray-900">Manual Provisioning</h2>
-                    <p className="text-sm text-gray-400 font-medium">Buat akses user baru. Sistem akan otomatis sync ke Database jika terhubung.</p>
+                    <p className="text-sm text-gray-400 font-medium">Buat akses user baru secara manual (Bypass Approval).</p>
                  </div>
               </div>
 
@@ -289,7 +368,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                     </div>
                  </div>
 
-                 <button type="submit" disabled={isDispatching} className="w-full py-6 bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest rounded-3xl shadow-2xl shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-3">
+                 <button type="submit" disabled={isDispatching} className="w-full py-6 bg-gray-900 text-white font-black uppercase text-[11px] tracking-widest rounded-3xl shadow-2xl shadow-gray-300 active:scale-95 transition-all flex items-center justify-center gap-3">
                     {isDispatching ? <><Loader2 size={18} className="animate-spin" /> Processing...</> : "Create User & Sync DB"}
                  </button>
               </form>
@@ -299,13 +378,13 @@ const DevPortal: React.FC<DevPortalProps> = ({
 
       {activeSubTab === 'users' && (
         <section className="space-y-6 animate-slide">
+           {/* ... existing Users table ... */}
            <div className="flex justify-between items-center px-6">
               <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Master User Database</h3>
               <div className="flex gap-2">
                  <button className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400">Total Nodes: {users.length}</button>
               </div>
            </div>
-           {/* Table Users Code Reused (No Changes Needed Here, just wrapper) */}
            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
               <table className="w-full text-left min-w-[1100px]">
                  <thead className="bg-gray-50/80 border-b border-gray-100">
@@ -320,7 +399,6 @@ const DevPortal: React.FC<DevPortalProps> = ({
                  </thead>
                  <tbody className="divide-y divide-gray-50">
                     {users.map(u => {
-                      // ... (Keep existing row logic)
                       return (
                        <tr key={u.id} className={`hover:bg-gray-50/50 transition-all`}>
                           <td className="px-8 py-6">
@@ -402,12 +480,12 @@ const DevPortal: React.FC<DevPortalProps> = ({
                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                        <Terminal size={24} className="text-amber-400" />
-                       <h3 className="text-xl font-black">Database Schema</h3>
+                       <h3 className="text-xl font-black">Database Schema (V2)</h3>
                     </div>
                     <button onClick={() => copyToClipboard(databaseService.getSchemaSQL())} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"><Copy size={16}/></button>
                  </div>
                  <p className="text-xs text-gray-400 leading-relaxed font-medium">
-                    Salin SQL di bawah ini dan jalankan di SQL Editor Supabase Anda agar tabel cocok dengan aplikasi monitoring.
+                    Salin SQL di bawah ini dan jalankan di SQL Editor Supabase Anda. Update V2 mencakup tabel <b>registrations</b> untuk fitur Register Publik.
                  </p>
                  <div className="bg-black/30 p-6 rounded-2xl border border-white/5 font-mono text-[10px] text-emerald-400 overflow-x-auto">
                     <pre>{databaseService.getSchemaSQL()}</pre>
@@ -417,6 +495,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
         </section>
       )}
 
+      {/* Integrations Tab remains same */}
       {activeSubTab === 'integrations' && (
         <section className="max-w-4xl mx-auto animate-slide space-y-8">
            {/* Webhook Section */}

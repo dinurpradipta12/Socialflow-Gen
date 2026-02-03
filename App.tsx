@@ -15,7 +15,8 @@ import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
 import { cloudService } from './services/cloudService';
-import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle } from 'lucide-react';
+import { databaseService } from './services/databaseService';
+import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle, UserPlus, ChevronLeft } from 'lucide-react';
 
 const cloudSyncChannel = new BroadcastChannel('sf_cloud_sync');
 
@@ -30,7 +31,7 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
   
-  const [authState, setAuthState] = useState<'login' | 'authenticated' | 'expired'>(user ? 'authenticated' : 'login');
+  const [authState, setAuthState] = useState<'login' | 'register' | 'authenticated' | 'expired'>(user ? 'authenticated' : 'login');
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -43,9 +44,14 @@ const App: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Login Form
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   
+  // Registration Form
+  const [regData, setRegData] = useState({ name: '', email: '', whatsapp: '', reason: '' });
+  const [regSuccess, setRegSuccess] = useState(false);
+
   const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
   const [analyticsData, setAnalyticsData] = useState<PostInsight[]>(() => {
@@ -91,12 +97,35 @@ const App: React.FC = () => {
   }, [fetchCloudData]);
 
   const handleRegistrationAction = async (regId: string, status: 'approved' | 'rejected') => {
-    // Legacy support for queue logic if needed, otherwise this is less used now
     setLoading(true);
     await cloudService.updateRegistrationStatus(regId, status);
-    // ...existing logic for approval if queue was used...
     await fetchCloudData();
     setLoading(false);
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setLoginError(null);
+
+    // Get DB Config from LocalStorage (Assumed set by Admin previously on this device)
+    const dbUrl = localStorage.getItem('sf_db_url');
+    const dbKey = localStorage.getItem('sf_db_key');
+
+    if (!dbUrl || !dbKey) {
+        setLoginError("Sistem belum terkonfigurasi. Hubungi Admin untuk setup Database Key pada device ini.");
+        setLoading(false);
+        return;
+    }
+
+    try {
+        await databaseService.createRegistration({ url: dbUrl, key: dbKey }, regData);
+        setRegSuccess(true);
+    } catch (error) {
+        setLoginError("Gagal terhubung ke Database. Pastikan koneksi internet stabil.");
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -104,14 +133,12 @@ const App: React.FC = () => {
     setLoading(true);
     setLoginError(null);
 
-    // TRIM & CLEAN INPUT: Mengatasi masalah spasi saat copy-paste email
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
     setTimeout(() => {
       const isDevLogin = cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password;
       
-      // Step 1: Cari User dengan email yang sudah dibersihkan
       const foundUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
       
       if (!foundUser) {
@@ -120,12 +147,9 @@ const App: React.FC = () => {
         return;
       }
 
-      // Step 2: Validasi Password
       const isPasswordCorrect = foundUser.password === cleanPassword || (!foundUser.password && cleanPassword === 'Social123');
       
       if (isDevLogin || isPasswordCorrect) {
-        
-        // CHECK: Apakah user baru perlu ganti password?
         if (foundUser.requiresPasswordChange) {
            setTempLoginUser(foundUser);
            setIsChangePasswordOpen(true);
@@ -133,7 +157,6 @@ const App: React.FC = () => {
            return;
         }
 
-        // Login Normal
         setUser(foundUser);
         localStorage.setItem('sf_session_user', JSON.stringify(foundUser));
         
@@ -165,15 +188,13 @@ const App: React.FC = () => {
       const updatedUser: User = {
          ...tempLoginUser,
          password: newPassword,
-         requiresPasswordChange: false, // Flag dinonaktifkan
-         status: 'active' // OTOMATIS UBAH STATUS JADI ACTIVE
+         requiresPasswordChange: false,
+         status: 'active'
       };
 
-      // Update Database
       const updatedAllUsers = allUsers.map(u => u.id === tempLoginUser.id ? updatedUser : u);
       setAllUsers(updatedAllUsers);
       
-      // Auto Login
       setUser(updatedUser);
       localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
       setAuthState('authenticated');
@@ -197,6 +218,7 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 font-sans">
         <div className="max-w-md w-full bg-white rounded-[3rem] shadow-2xl p-10 space-y-8 border border-gray-100 animate-slide">
+           {/* ... existing password change UI ... */}
            <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-[2rem] flex items-center justify-center mx-auto shadow-xl shadow-blue-100">
                  <Lock size={32} />
@@ -230,6 +252,7 @@ const App: React.FC = () => {
      return (
         <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-6 font-sans">
            <div className="max-w-md w-full bg-white rounded-[3rem] shadow-2xl p-12 text-center space-y-8 border border-rose-50 animate-slide">
+              {/* ... existing expired UI ... */}
               <div className="w-24 h-24 bg-rose-50 text-rose-500 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-xl shadow-rose-100 animate-pulse">
                  <Lock size={48} />
               </div>
@@ -246,6 +269,63 @@ const App: React.FC = () => {
            </div>
         </div>
      );
+  }
+
+  if (authState === 'register') {
+    return (
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
+        <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-8 border border-gray-100 animate-slide">
+          <button onClick={() => { setAuthState('login'); setRegSuccess(false); setLoginError(null); }} className="flex items-center gap-2 text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest transition-colors">
+            <ChevronLeft size={16} /> Kembali ke Login
+          </button>
+
+          <div className="space-y-4">
+             <div className="w-16 h-16 rounded-3xl flex items-center justify-center text-white text-2xl font-black bg-gray-900 shadow-xl shadow-gray-200">SF</div>
+             <h1 className="text-3xl font-black text-gray-900 tracking-tighter">New Registration</h1>
+             <p className="text-gray-400 font-medium text-sm">Data Anda akan masuk ke <b>Database Monitoring</b> untuk diverifikasi oleh Admin.</p>
+          </div>
+
+          {regSuccess ? (
+            <div className="p-8 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 text-center space-y-4 animate-slide">
+              <div className="w-16 h-16 bg-white text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-md"><CheckCircle size={32}/></div>
+              <h3 className="text-xl font-black text-gray-900">Registrasi Terkirim!</h3>
+              <p className="text-sm text-gray-500 leading-relaxed">Admin akan memverifikasi data Anda melalui Aplikasi Monitoring. Silakan tunggu konfirmasi via WhatsApp/Email.</p>
+              <button onClick={() => { setAuthState('login'); setRegSuccess(false); }} className="w-full py-4 bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl mt-4">Kembali ke Login</button>
+            </div>
+          ) : (
+            <form onSubmit={handleRegisterSubmit} className="space-y-5">
+              {loginError && (
+                <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3 animate-slide">
+                   <AlertTriangle size={18} className="text-rose-500 shrink-0" />
+                   <p className="text-[11px] font-bold text-rose-600 leading-tight">{loginError}</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Nama Lengkap</label>
+                 <input type="text" required value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-gray-100 transition-all text-sm" placeholder="John Doe" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Email Address</label>
+                 <input type="email" required value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-gray-100 transition-all text-sm" placeholder="user@example.com" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">WhatsApp</label>
+                 <input type="text" required value={regData.whatsapp} onChange={e => setRegData({...regData, whatsapp: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-gray-100 transition-all text-sm" placeholder="62812xxx" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Alasan Bergabung</label>
+                 <input type="text" required value={regData.reason} onChange={e => setRegData({...regData, reason: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-gray-100 transition-all text-sm" placeholder="Untuk manajemen konten..." />
+              </div>
+
+              <button type="submit" disabled={loading} className="w-full py-6 bg-gray-900 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-2xl shadow-gray-200 active:scale-95 transition-all flex items-center justify-center gap-3">
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <>Kirim Data Registrasi <ArrowRight size={16}/></>}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    );
   }
 
   if (authState === 'login') {
@@ -292,10 +372,10 @@ const App: React.FC = () => {
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>Access System <ArrowRight size={16}/></>}
             </button>
             
-            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-               <p className="text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                 Akses tertutup. Registrasi hanya dapat dilakukan melalui Administrator Socialflow.
-               </p>
+            <div className="pt-2 text-center">
+               <button type="button" onClick={() => { setAuthState('register'); setLoginError(null); }} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-500 transition-colors">
+                 Register New Account
+               </button>
             </div>
           </form>
         </div>
@@ -303,6 +383,7 @@ const App: React.FC = () => {
     );
   }
 
+  // ... (Main App Render remain same)
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans overflow-x-hidden relative">
       <Sidebar 
