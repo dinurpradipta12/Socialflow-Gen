@@ -240,9 +240,9 @@ const App: React.FC = () => {
           localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
           setSetupStep('choice'); 
           
-      } catch (err) {
+      } catch (err: any) {
           console.error(err);
-          alert("Gagal membuat workspace di Cloud Database. Coba lagi.");
+          alert(`Gagal membuat workspace: ${err.message}`);
       } finally {
           setLoading(false);
       }

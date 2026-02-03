@@ -42,7 +42,10 @@ export const databaseService = {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error(`DB Error: ${response.statusText}`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(`DB Error (${response.status}): ${err.message || err.error || response.statusText || 'Unknown error'}`);
+      }
       return true;
     } catch (error) {
       console.error("Database Sync Error:", error);
@@ -177,7 +180,10 @@ export const databaseService = {
         body: JSON.stringify(payload)
     });
 
-    if (!response.ok) throw new Error("Gagal membuat workspace di DB");
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(`Gagal membuat workspace (${response.status}): ${err.message || err.error || response.statusText}`);
+    }
     return true;
   },
 
@@ -289,7 +295,10 @@ export const databaseService = {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error(`Registration Failed: ${response.statusText}`);
+      if (!response.ok) {
+         const err = await response.json().catch(() => ({}));
+         throw new Error(`Registration Failed (${response.status}): ${err.message || err.error || response.statusText}`);
+      }
       return true;
     } catch (error) {
       console.error("Registration Error:", error);
@@ -331,9 +340,12 @@ CREATE TABLE IF NOT EXISTS users (
     status VARCHAR(50) DEFAULT 'active',
     subscription_expiry DATE,
     performance_score INTEGER DEFAULT 0,
-    workspace_id VARCHAR(255), -- Link ke Workspace
+    workspace_id VARCHAR(255),
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- MIGRATION: Ensure workspace_id exists (Safely add if missing)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS workspace_id VARCHAR(255);
 
 -- TABLE 2: REGISTRATIONS
 CREATE TABLE IF NOT EXISTS registrations (
@@ -357,9 +369,15 @@ CREATE TABLE IF NOT EXISTS workspaces (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Indexes
+-- INDEXES
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_ws_code ON workspaces(invite_code);
+
+-- SECURITY SETTINGS (DISABLE RLS FOR APP ACCESS)
+-- Jalankan ini jika Anda mengalami error "new row violates row-level security policy"
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE workspaces DISABLE ROW LEVEL SECURITY;
+ALTER TABLE registrations DISABLE ROW LEVEL SECURITY;
     `.trim();
   }
 };
