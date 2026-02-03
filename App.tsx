@@ -456,8 +456,7 @@ const App: React.FC = () => {
             </form>
           )}
         </div>
-      )}
-    </div>
+      </div>
     );
   }
 
