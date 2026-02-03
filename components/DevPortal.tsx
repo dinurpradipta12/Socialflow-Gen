@@ -122,7 +122,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
           id: `U-IMPORT-${reg.id}`,
           name: reg.name,
           email: reg.email,
-          password: 'Social123',
+          password: reg.password || 'Social123', // Use User Password
           whatsapp: reg.whatsapp,
           role: 'viewer',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
@@ -135,13 +135,13 @@ const DevPortal: React.FC<DevPortalProps> = ({
           kpi: [],
           activityLogs: [],
           performanceScore: 0,
-          requiresPasswordChange: true
+          requiresPasswordChange: false // Sudah set password sendiri
         };
         
         newUsers.push(newUser);
         importedCount++;
         
-        // Auto Sync User back to Users Table (to confirm existence)
+        // Auto Sync User back to Users Table (to confirm existence in App)
         await databaseService.upsertUser(dbConfig, newUser);
       }
 
@@ -376,6 +376,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
         </section>
       )}
 
+      {/* Users & Database Tab remains same logic ... */}
       {activeSubTab === 'users' && (
         <section className="space-y-6 animate-slide">
            {/* ... existing Users table ... */}
@@ -480,12 +481,12 @@ const DevPortal: React.FC<DevPortalProps> = ({
                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                        <Terminal size={24} className="text-amber-400" />
-                       <h3 className="text-xl font-black">Database Schema (V2)</h3>
+                       <h3 className="text-xl font-black">Database Schema (V3)</h3>
                     </div>
                     <button onClick={() => copyToClipboard(databaseService.getSchemaSQL())} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors"><Copy size={16}/></button>
                  </div>
                  <p className="text-xs text-gray-400 leading-relaxed font-medium">
-                    Salin SQL di bawah ini dan jalankan di SQL Editor Supabase Anda. Update V2 mencakup tabel <b>registrations</b> untuk fitur Register Publik.
+                    Salin SQL di bawah ini dan jalankan di SQL Editor Supabase Anda. Update V3 menambahkan field <b>password</b>.
                  </p>
                  <div className="bg-black/30 p-6 rounded-2xl border border-white/5 font-mono text-[10px] text-emerald-400 overflow-x-auto">
                     <pre>{databaseService.getSchemaSQL()}</pre>

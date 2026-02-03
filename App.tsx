@@ -36,6 +36,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // States for Change Password Logic
@@ -49,7 +50,7 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   
   // Registration Form
-  const [regData, setRegData] = useState({ name: '', email: '', whatsapp: '', reason: '' });
+  const [regData, setRegData] = useState({ name: '', email: '', password: '', whatsapp: '', reason: '' });
   const [regSuccess, setRegSuccess] = useState(false);
 
   const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
@@ -113,7 +114,7 @@ const App: React.FC = () => {
     const dbKey = localStorage.getItem('sf_db_key');
 
     if (!dbUrl || !dbKey) {
-        setLoginError("Sistem belum terkonfigurasi. Hubungi Admin untuk setup Database Key pada device ini.");
+        setLoginError("Setup Database belum terdeteksi di perangkat ini. Hubungi Admin untuk konfigurasi.");
         setLoading(false);
         return;
     }
@@ -122,7 +123,8 @@ const App: React.FC = () => {
         await databaseService.createRegistration({ url: dbUrl, key: dbKey }, regData);
         setRegSuccess(true);
     } catch (error) {
-        setLoginError("Gagal terhubung ke Database. Pastikan koneksi internet stabil.");
+        console.error(error);
+        setLoginError("Gagal mengirim data ke Supabase. Pastikan koneksi internet stabil.");
     } finally {
         setLoading(false);
     }
@@ -308,6 +310,22 @@ const App: React.FC = () => {
               <div className="space-y-2">
                  <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Email Address</label>
                  <input type="email" required value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-gray-100 transition-all text-sm" placeholder="user@example.com" />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Password Login</label>
+                 <div className="relative">
+                    <input 
+                      type={showRegPassword ? "text" : "password"}
+                      required 
+                      value={regData.password} 
+                      onChange={e => setRegData({...regData, password: e.target.value})} 
+                      className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-gray-100 transition-all text-sm" 
+                      placeholder="Min 6 Karakter" 
+                    />
+                    <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 transition-colors">
+                       {showRegPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                 </div>
               </div>
               <div className="space-y-2">
                  <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">WhatsApp</label>
