@@ -25,7 +25,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // Field password untuk login
+  password?: string; 
   whatsapp?: string;
   role: UserRole;
   avatar?: string;
@@ -33,7 +33,7 @@ export interface User {
   isSubscribed: boolean;
   activationDate?: string;
   subscriptionExpiry?: string;
-  status?: 'active' | 'suspended' | 'expired' | 'pending'; // Added 'pending'
+  status?: 'active' | 'suspended' | 'expired' | 'pending';
   jobdesk: string;
   kpi: string[];
   activityLogs: ActivityLog[];
@@ -42,7 +42,7 @@ export interface User {
   birthDate?: string;
   settings?: UserSettings;
   workspaceId?: string;
-  requiresPasswordChange?: boolean; // New Flag for First Login
+  requiresPasswordChange?: boolean;
 }
 
 export interface CloudConfig {
@@ -74,11 +74,20 @@ export interface RegistrationRequest {
   timestamp: string;
   status: 'pending' | 'approved' | 'rejected';
   nodeId: string;
+  workspaceChoice?: 'join' | 'create'; // New field
 }
 
 export interface Message {
   id: string;
   senderId: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface Comment {
+  id: string;
+  userId: string;
+  userName: string;
   text: string;
   timestamp: string;
 }
@@ -95,6 +104,8 @@ export interface ContentPlanItem {
   postLink: string;
   description: string;
   approvedBy?: string;
+  accountId?: string; // Untuk multi-akun (e.g., 'account-1', 'account-2')
+  comments?: Comment[];
 }
 
 export interface PostInsight {
@@ -139,4 +150,29 @@ export interface SystemNotification {
   timestamp: string;
   read: boolean;
   type?: 'info' | 'warning' | 'success';
+}
+
+// New Types for Dashboard Analytics
+export interface AccountAnalytics {
+  username: string;
+  platform: 'Instagram' | 'TikTok';
+  followerCount: number;
+  avgEngagementRate: number;
+  totalComments: number;
+  totalLikes: number;
+  growthData: { date: string; followers: number }[];
+  posts: {
+    id: string;
+    thumbnail: string;
+    caption: string;
+    type: 'image' | 'video' | 'reel';
+    date: string;
+    metrics: {
+      likes: number;
+      comments: number;
+      shares: number;
+      saves: number;
+    };
+    engagementRate: number;
+  }[];
 }

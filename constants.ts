@@ -1,7 +1,8 @@
 
 import { Workspace, ContentItem, User, Permissions, RegistrationRequest, ContentPlanItem, Message } from './types';
 
-export const APP_VERSION = '3.0.9'; 
+export const APP_VERSION = '4.0.0-Arunika'; 
+export const APP_NAME = 'Arunika Social Pulse';
 
 // KONFIGURASI DATABASE GLOBAL (AUTO CONNECT)
 export const SUPABASE_CONFIG = {
@@ -31,31 +32,33 @@ const FULL_PERMISSIONS: Permissions = {
 };
 
 export const DEV_CREDENTIALS = {
-  email: 'cs.socialflow@gmail.com',
+  email: 'cs.arunika@gmail.com',
   password: 'Dinur@12345'
 };
 
 export const MOCK_USERS: User[] = [
   { 
     id: '1', 
-    name: 'Super Admin', 
-    email: 'admin@snaillabs.id', 
+    name: 'Owner Arunika', 
+    email: 'admin@arunika.id', 
+    password: 'admin', // Default password for mock
     role: 'superuser', 
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
     permissions: { ...FULL_PERMISSIONS, devPortal: false },
     isSubscribed: true,
     subscriptionExpiry: '2025-12-31',
-    jobdesk: 'Operations Manager & Strategic Content Planner',
-    kpi: ['Increase engagement by 20%', 'Maintain 95% publishing consistency'],
+    jobdesk: 'CEO & Strategist',
+    kpi: ['Grow Monthly Users by 20%', 'Maintain System Stability'],
     activityLogs: [{ id: 'l1', type: 'checkin', timestamp: '2023-10-25T08:00:00Z' }],
     performanceScore: 92,
-    socialMedia: '@snaillabs_admin',
+    socialMedia: '@arunika_pulse',
     birthDate: '1995-05-20'
   },
   { 
     id: 'dev-1', 
-    name: 'Socialflow Dev', 
+    name: 'Arunika Dev', 
     email: DEV_CREDENTIALS.email, 
+    password: DEV_CREDENTIALS.password,
     role: 'developer', 
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=dev',
     permissions: FULL_PERMISSIONS,
@@ -77,7 +80,6 @@ export const MOCK_REGISTRATIONS: RegistrationRequest[] = [
     status: 'pending',
     handle: '@andipratama',
     niche: 'Tech & Lifestyle',
-    // Added missing required property nodeId
     nodeId: 'sf-node-mock-001'
   },
 ];
@@ -85,17 +87,14 @@ export const MOCK_REGISTRATIONS: RegistrationRequest[] = [
 export const MOCK_WORKSPACES: Workspace[] = [
   { 
     id: 'ws1', 
-    name: 'Snaillabs Creative', 
+    name: 'Arunika Creative Studio', 
     color: 'blue', 
     members: MOCK_USERS,
-    inviteCode: 'sf-snaillabs-2025',
+    inviteCode: 'arunika-2025-join',
     ownerId: '1'
   },
 ];
 
-/**
- * Added missing MOCK_CONTENT to fix compilation error in Calendar.tsx
- */
 export const MOCK_CONTENT: ContentItem[] = [
   { 
     id: 'c1', 
@@ -115,48 +114,42 @@ export const MOCK_CONTENT: ContentItem[] = [
   }
 ];
 
-/**
- * Added missing MOCK_CONTENT_PLANS to fix compilation error in ContentPlan.tsx
- */
 export const MOCK_CONTENT_PLANS: ContentPlanItem[] = [
   { 
     id: 'cp1', 
-    title: 'Snaillabs Q4 Strategy', 
+    title: 'Strategi Q4 Arunika', 
     status: 'Drafting', 
     value: 'Educational', 
     pillar: 'Marketing', 
     type: 'Reels', 
-    description: 'Our core strategy for the last quarter.', 
-    postLink: 'https://instagram.com/snaillabs', 
-    approvedBy: 'Super Admin' 
+    description: 'Strategi konten untuk akhir tahun.', 
+    postLink: 'https://instagram.com/arunika', 
+    approvedBy: 'Owner Arunika',
+    accountId: 'account-1', // Default account
+    comments: []
   },
   { 
     id: 'cp2', 
-    title: 'User Feedback Highlight', 
+    title: 'Testimoni User', 
     status: 'Diposting', 
     value: 'Engagement', 
     pillar: 'Community', 
     type: 'Carousel', 
-    description: 'Sharing what our users say about us.', 
+    description: 'Sharing apa kata mereka.', 
     postLink: 'https://instagram.com/p/mock123', 
-    approvedBy: 'Super Admin' 
+    approvedBy: 'Owner Arunika',
+    accountId: 'account-1',
+    comments: [
+      { id: 'cm1', userId: '1', userName: 'Owner Arunika', text: 'Tolong revisi slide ke-3 ya, font terlalu kecil.', timestamp: '2023-10-26T10:00:00Z' }
+    ]
   }
 ];
 
-/**
- * Added missing MOCK_MESSAGES to fix compilation error in Messages.tsx
- */
 export const MOCK_MESSAGES: Message[] = [
   { 
     id: 'msg1', 
     senderId: '1', 
-    text: 'Halo tim, bagaimana progress dashboard?', 
-    timestamp: new Date().toISOString() 
-  },
-  { 
-    id: 'msg2', 
-    senderId: 'dev-1', 
-    text: 'Sedang optimasi cloud sync engine v3.0.8.', 
+    text: 'Halo tim, selamat datang di Arunika Social Pulse!', 
     timestamp: new Date().toISOString() 
   }
 ];

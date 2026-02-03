@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Calendar, Megaphone, BarChart3, Link2, Users, Settings, LogOut, FileSpreadsheet, Database, Clock as ClockIcon
 } from 'lucide-react';
 import { User } from '../types';
+import { APP_NAME } from '../constants';
 
 interface SidebarProps {
   activeTab: string;
@@ -45,9 +46,13 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, onLogout, us
         {/* Logo Section */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-black text-xl shadow-lg">SF</div>
+            {appLogo ? (
+                <img src={appLogo} alt="Logo" className="w-10 h-10 rounded-xl object-contain bg-white shadow-sm" />
+            ) : (
+                <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-black text-xl shadow-lg">AR</div>
+            )}
             <div>
-              <h1 className="font-black text-gray-900 text-sm leading-tight tracking-tight">Socialflow</h1>
+              <h1 className="font-black text-gray-900 text-sm leading-tight tracking-tight">{APP_NAME}</h1>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none mt-0.5">Control Center</p>
             </div>
           </div>

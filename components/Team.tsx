@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, ThemeColor, Permissions, SystemNotification, Workspace } from '../types';
 import { THEME_COLORS } from '../constants';
-import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Trash2, Key, Target, CheckSquare, Plus } from 'lucide-react';
+import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Trash2, Key, Target, CheckSquare, Plus, Copy, Link as LinkIcon } from 'lucide-react';
 
 interface TeamProps {
   primaryColor: ThemeColor;
@@ -18,7 +18,6 @@ interface TeamProps {
 const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpdateWorkspace, addSystemNotification, allUsers, setUsers, setWorkspace }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
   const [newKpi, setNewKpi] = useState('');
   
   const colorSet = THEME_COLORS[primaryColor];
@@ -72,6 +71,12 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
     });
   };
 
+  const copyInviteLink = () => {
+      const link = `${window.location.origin}/join/${workspace.inviteCode}`;
+      navigator.clipboard.writeText(link);
+      alert("Link Invite berhasil disalin ke clipboard!");
+  };
+
   return (
     <div className="space-y-8 animate-slide">
       <div className="flex justify-between items-end">
@@ -79,13 +84,22 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Team Hub</h1>
           <p className="text-gray-400 mt-1 font-medium">Kelola hak akses dan performa tim di Workspace {workspace.name}.</p>
         </div>
-        <button 
-          onClick={() => setIsInviteModalOpen(true)}
-          className={`flex items-center gap-2 px-8 py-4 ${colorSet.bg} ${colorSet.text} rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all`}
-        >
-          <UserPlus size={18} />
-          <span>Invite Member</span>
-        </button>
+        <div className="flex gap-2">
+            <button 
+              onClick={copyInviteLink}
+              className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-gray-600"
+            >
+              <LinkIcon size={18} />
+              <span>Copy Link</span>
+            </button>
+            <button 
+              onClick={() => setIsInviteModalOpen(true)}
+              className={`flex items-center gap-2 px-8 py-4 ${colorSet.bg} ${colorSet.text} rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all`}
+            >
+              <UserPlus size={18} />
+              <span>Invite Member</span>
+            </button>
+        </div>
       </div>
 
       {editingUser && (

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ThemeColor, Workspace, User, Message, PostInsight, RegistrationRequest } from './types';
-import { MOCK_WORKSPACES, MOCK_USERS, DEV_CREDENTIALS, SUPABASE_CONFIG } from './constants';
+import { ThemeColor, Workspace, User, Message, PostInsight, RegistrationRequest, SystemNotification } from './types';
+import { MOCK_WORKSPACES, MOCK_USERS, DEV_CREDENTIALS, SUPABASE_CONFIG, APP_NAME } from './constants';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Calendar from './components/Calendar';
@@ -14,9 +14,10 @@ import DevPortal from './components/DevPortal';
 import AdsWorkspace from './components/AdsWorkspace';
 import Analytics from './components/Analytics';
 import ChatPopup from './components/ChatPopup';
+import TopNotification from './components/TopNotification';
 import { cloudService } from './services/cloudService';
 import { databaseService } from './services/databaseService';
-import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle, UserPlus, ChevronLeft } from 'lucide-react';
+import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle, UserPlus, ChevronLeft, Building2, Link } from 'lucide-react';
 
 const cloudSyncChannel = new BroadcastChannel('sf_cloud_sync');
 
@@ -39,6 +40,13 @@ const App: React.FC = () => {
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // Global Settings State
+  const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
+  const [customLogo, setCustomLogo] = useState<string | null>(localStorage.getItem('sf_custom_logo'));
+
+  // Notifications
+  const [topNotification, setTopNotification] = useState<SystemNotification | null>(null);
+
   // States for Change Password Logic
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [tempLoginUser, setTempLoginUser] = useState<User | null>(null);
@@ -50,10 +58,9 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   
   // Registration Form
-  const [regData, setRegData] = useState({ name: '', email: '', password: '', whatsapp: '', reason: '' });
+  const [regData, setRegData] = useState({ name: '', email: '', password: '', whatsapp: '', reason: '', workspaceChoice: 'join' as 'join' | 'create' });
   const [regSuccess, setRegSuccess] = useState(false);
 
-  const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
   const [analyticsData, setAnalyticsData] = useState<PostInsight[]>(() => {
     const saved = localStorage.getItem('sf_analytics_db');
@@ -67,6 +74,14 @@ const App: React.FC = () => {
       key: localStorage.getItem('sf_db_key') || SUPABASE_CONFIG.key
     };
   };
+
+  useEffect(() => {
+    if (customLogo) {
+      localStorage.setItem('sf_custom_logo', customLogo);
+    } else {
+      localStorage.removeItem('sf_custom_logo');
+    }
+  }, [customLogo]);
 
   // --- SUBSCRIPTION GUARD ENGINE ---
   useEffect(() => {
@@ -126,7 +141,11 @@ const App: React.FC = () => {
     }
 
     try {
-        await databaseService.createRegistration(dbConfig, regData);
+        // Pass password field correctly
+        await databaseService.createRegistration(dbConfig, {
+            ...regData,
+            password: regData.password // Ensure password is sent
+        });
         setRegSuccess(true);
     } catch (error) {
         console.error(error);
@@ -176,13 +195,12 @@ const App: React.FC = () => {
             return;
         }
 
-        // Cek Password (Priority: Password dari DB -> Default 'Social123')
-        // Ini mengatasi masalah "Password Salah" meski sudah approve.
-        // User dari DB pasti punya field password yang terbaru.
+        // Cek Password 
+        // Logic: Jika ada password di DB, gunakan itu. Jika tidak, gunakan 'Social123'
         const dbPassword = remoteUser.password || 'Social123';
         
         if (cleanPassword !== dbPassword) {
-             setLoginError("Password salah. Coba 'Social123' atau password yang Anda daftarkan.");
+             setLoginError("Password salah.");
              setLoading(false);
              return;
         }
@@ -205,7 +223,8 @@ const App: React.FC = () => {
             return;
         }
 
-        // 3. Cek Wajib Ganti Password
+        // 3. Cek Wajib Ganti Password (Hanya jika login pakai default 'Social123' dan belum pernah ganti)
+        // Jika user register dengan password sendiri, requiresPasswordChange harusnya false
         if (remoteUser.requiresPasswordChange) {
             setTempLoginUser(remoteUser);
             setIsChangePasswordOpen(true);
@@ -277,6 +296,16 @@ const App: React.FC = () => {
     localStorage.setItem('sf_analytics_db', JSON.stringify(updated));
   };
 
+  const triggerNotification = (notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) => {
+    const newNotif: SystemNotification = {
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      read: false,
+      ...notif
+    };
+    setTopNotification(newNotif);
+  };
+
   const isDev = user?.role === 'developer';
   const activeWorkspace = MOCK_WORKSPACES[0];
 
@@ -345,16 +374,16 @@ const App: React.FC = () => {
           </button>
 
           <div className="space-y-4">
-             <div className="w-16 h-16 rounded-3xl flex items-center justify-center text-white text-2xl font-black bg-gray-900 shadow-xl shadow-gray-200">SF</div>
+             <div className="w-16 h-16 rounded-3xl flex items-center justify-center text-white text-2xl font-black bg-gray-900 shadow-xl shadow-gray-200">AR</div>
              <h1 className="text-3xl font-black text-gray-900 tracking-tighter">New Registration</h1>
-             <p className="text-gray-400 font-medium text-sm">Data Anda akan masuk ke <b>Database Monitoring</b> untuk diverifikasi oleh Admin.</p>
+             <p className="text-gray-400 font-medium text-sm">Join Arunika Social Pulse untuk manajemen konten yang lebih baik.</p>
           </div>
 
           {regSuccess ? (
             <div className="p-8 bg-emerald-50 rounded-[2.5rem] border border-emerald-100 text-center space-y-4 animate-slide">
               <div className="w-16 h-16 bg-white text-emerald-500 rounded-full flex items-center justify-center mx-auto shadow-md"><CheckCircle size={32}/></div>
               <h3 className="text-xl font-black text-gray-900">Registrasi Terkirim!</h3>
-              <p className="text-sm text-gray-500 leading-relaxed">Admin akan memverifikasi data Anda melalui Aplikasi Monitoring. Silakan tunggu konfirmasi via WhatsApp/Email.</p>
+              <p className="text-sm text-gray-500 leading-relaxed">Admin akan memverifikasi data Anda. Akun Anda akan aktif setelah approval.</p>
               <button onClick={() => { setAuthState('login'); setRegSuccess(false); }} className="w-full py-4 bg-emerald-500 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl mt-4">Kembali ke Login</button>
             </div>
           ) : (
@@ -365,6 +394,28 @@ const App: React.FC = () => {
                    <p className="text-[11px] font-bold text-rose-600 leading-tight">{loginError}</p>
                 </div>
               )}
+
+              {/* Workspace Choice */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                  <button 
+                    type="button"
+                    onClick={() => setRegData({...regData, workspaceChoice: 'join'})}
+                    className={`p-4 rounded-2xl border text-left transition-all ${regData.workspaceChoice === 'join' ? 'bg-blue-50 border-blue-200 ring-2 ring-blue-100' : 'bg-white border-gray-100 opacity-60'}`}
+                  >
+                     <Link size={20} className="mb-2 text-blue-500" />
+                     <p className="text-xs font-black text-gray-900">Join Team</p>
+                     <p className="text-[9px] text-gray-400">Via Invite Link</p>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setRegData({...regData, workspaceChoice: 'create'})}
+                    className={`p-4 rounded-2xl border text-left transition-all ${regData.workspaceChoice === 'create' ? 'bg-purple-50 border-purple-200 ring-2 ring-purple-100' : 'bg-white border-gray-100 opacity-60'}`}
+                  >
+                     <Building2 size={20} className="mb-2 text-purple-500" />
+                     <p className="text-xs font-black text-gray-900">Create New</p>
+                     <p className="text-[9px] text-gray-400">Workspace Sendiri</p>
+                  </button>
+              </div>
 
               <div className="space-y-2">
                  <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Nama Lengkap</label>
@@ -383,7 +434,7 @@ const App: React.FC = () => {
                       value={regData.password} 
                       onChange={e => setRegData({...regData, password: e.target.value})} 
                       className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-2xl outline-none font-bold text-gray-700 focus:bg-white focus:ring-4 focus:ring-gray-100 transition-all text-sm" 
-                      placeholder="Min 6 Karakter" 
+                      placeholder="Buat Password Anda" 
                     />
                     <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-900 transition-colors">
                        {showRegPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -405,7 +456,8 @@ const App: React.FC = () => {
             </form>
           )}
         </div>
-      </div>
+      )}
+    </div>
     );
   }
 
@@ -414,10 +466,10 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
         <div className="max-w-[440px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-12 border border-gray-100 animate-slide">
           <div className="text-center space-y-4">
-             <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">SF</div>
-             <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Socialflow</h1>
+             <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">AR</div>
+             <h1 className="text-3xl font-black text-gray-900 tracking-tighter">{APP_NAME}</h1>
              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-                <ShieldCheck size={12} className="text-blue-500"/> Closed System Core V3.7.0
+                <ShieldCheck size={12} className="text-blue-500"/> Social Management System
              </p>
           </div>
 
@@ -431,11 +483,11 @@ const App: React.FC = () => {
 
             <div className="space-y-2">
                <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Email Address</label>
-               <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={`w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Email") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} placeholder="user@snaillabs.id" />
+               <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className={`w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-gray-700 transition-all text-sm ${loginError && loginError.includes("Email") ? 'border-rose-200 focus:ring-rose-50' : 'border-gray-100 focus:bg-white focus:ring-4 focus:ring-blue-50'}`} placeholder="user@arunika.id" />
             </div>
             
             <div className="space-y-2">
-               <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Security Code</label>
+               <label className="text-[9px] font-black uppercase text-gray-400 ml-4 tracking-widest">Password</label>
                <div className="relative">
                   <input 
                     type={showPassword ? "text" : "password"} 
@@ -464,33 +516,43 @@ const App: React.FC = () => {
     );
   }
 
-  // ... (Main App Render remain same)
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans overflow-x-hidden relative">
+      {topNotification && (
+        <TopNotification 
+          primaryColor={activeWorkspace.color}
+          senderName={topNotification.senderName}
+          messageText={topNotification.messageText}
+          onClose={() => setTopNotification(null)}
+          onClick={() => { setTopNotification(null); setActiveTab('messages'); }}
+        />
+      )}
+
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={(t) => setActiveTab(t)} 
         primaryColorHex={primaryColorHex} 
         onLogout={() => { setUser(null); localStorage.removeItem('sf_session_user'); setAuthState('login'); }} 
         user={user!} 
+        appLogo={customLogo}
         isOpen={isSidebarOpen}
       />
       
       <main className={`flex-1 transition-all duration-300 min-h-screen md:ml-72 p-6 md:p-12 relative`}>
         <div className="flex items-center justify-between mb-8 md:hidden">
            <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm"><Menu size={24} /></button>
-           <h2 className="text-sm font-black text-gray-900 tracking-tighter uppercase">{isDev ? 'Developer Access' : 'Socialflow Hub'}</h2>
+           <h2 className="text-sm font-black text-gray-900 tracking-tighter uppercase">{isDev ? 'Developer Access' : APP_NAME}</h2>
         </div>
 
         <div className="max-w-6xl mx-auto w-full">
            {activeTab === 'dashboard' && !isDev && <Dashboard primaryColor={activeWorkspace.color} />}
-           {activeTab === 'contentPlan' && !isDev && <ContentPlan primaryColorHex={primaryColorHex} onSaveInsight={saveAnalytics} users={allUsers} />}
+           {activeTab === 'contentPlan' && !isDev && <ContentPlan primaryColorHex={primaryColorHex} onSaveInsight={saveAnalytics} users={allUsers} addNotification={triggerNotification} currentUser={user!} />}
            {activeTab === 'calendar' && !isDev && <Calendar primaryColor={activeWorkspace.color} />}
            {activeTab === 'ads' && !isDev && <AdsWorkspace primaryColor={activeWorkspace.color} />}
            {activeTab === 'analytics' && !isDev && <Analytics primaryColorHex={primaryColorHex} analyticsData={analyticsData} onSaveInsight={saveAnalytics} />}
            {activeTab === 'tracker' && !isDev && <LinkTracker primaryColorHex={primaryColorHex} onSaveManualInsight={saveAnalytics} />}
-           {activeTab === 'team' && !isDev && <Team primaryColor={activeWorkspace.color} currentUser={user!} workspace={activeWorkspace} onUpdateWorkspace={()=>{}} addSystemNotification={()=>{}} allUsers={allUsers} setUsers={setAllUsers} setWorkspace={()=>{}} />}
-           {activeTab === 'settings' && !isDev && <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex="#DDD6FE" setAccentColorHex={()=>{}} fontSize="medium" setFontSize={()=>{}} customLogo={null} setCustomLogo={()=>{}} />}
+           {activeTab === 'team' && !isDev && <Team primaryColor={activeWorkspace.color} currentUser={user!} workspace={activeWorkspace} onUpdateWorkspace={()=>{}} addSystemNotification={triggerNotification} allUsers={allUsers} setUsers={setAllUsers} setWorkspace={()=>{}} />}
+           {activeTab === 'settings' && !isDev && <Settings primaryColorHex={primaryColorHex} setPrimaryColorHex={setPrimaryColorHex} accentColorHex="#DDD6FE" setAccentColorHex={()=>{}} fontSize="medium" setFontSize={()=>{}} customLogo={customLogo} setCustomLogo={setCustomLogo} />}
            {activeTab === 'profile' && !isDev && <Profile user={user!} primaryColor={activeWorkspace.color} setUser={setUser} />}
            
            {activeTab === 'devPortal' && isDev && (
@@ -507,6 +569,18 @@ const App: React.FC = () => {
              />
            )}
         </div>
+
+        {!isDev && (
+          <ChatPopup 
+            primaryColor={activeWorkspace.color}
+            currentUser={user!}
+            messages={[]} 
+            onSendMessage={()=>{}}
+            isOpen={false}
+            setIsOpen={()=>{}}
+            unreadCount={0}
+          />
+        )}
       </main>
     </div>
   );
