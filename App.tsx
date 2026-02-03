@@ -109,7 +109,7 @@ const App: React.FC = () => {
     setLoading(true);
     setLoginError(null);
 
-    // Get DB Config from LocalStorage (Assumed set by Admin previously on this device)
+    // Get DB Config from LocalStorage
     const dbUrl = localStorage.getItem('sf_db_url');
     const dbKey = localStorage.getItem('sf_db_key');
 
@@ -130,7 +130,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setLoginError(null);
@@ -138,35 +138,63 @@ const App: React.FC = () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
+    // 1. Cek User di Local State (Priority)
+    let foundUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
+    const isDevLogin = cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password;
+
+    // 2. Jika tidak ada di local & bukan dev, Cek ke Supabase Cloud
+    if (!foundUser && !isDevLogin) {
+       const dbUrl = localStorage.getItem('sf_db_url');
+       const dbKey = localStorage.getItem('sf_db_key');
+
+       if (dbUrl && dbKey) {
+          try {
+             const remoteUser = await databaseService.getUserByEmail({ url: dbUrl, key: dbKey }, cleanEmail);
+             if (remoteUser) {
+                // User ditemukan di Cloud, simpan ke Local Storage untuk sesi berikutnya
+                foundUser = remoteUser;
+                setAllUsers(prev => {
+                   // Pastikan tidak duplikat
+                   if (prev.some(u => u.id === remoteUser.id)) return prev;
+                   return [...prev, remoteUser];
+                });
+             }
+          } catch (err) {
+             console.error("Cloud Login Check Failed:", err);
+          }
+       }
+    }
+
+    // 3. Validasi Login
     setTimeout(() => {
-      const isDevLogin = cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password;
-      
-      const foundUser = allUsers.find(u => u.email.trim().toLowerCase() === cleanEmail);
-      
-      if (!foundUser) {
-        setLoginError("Email belum terdaftar dalam sistem.");
+      if (!foundUser && !isDevLogin) {
+        setLoginError("Email belum terdaftar dalam sistem (Local/Cloud).");
         setLoading(false);
         return;
       }
 
-      const isPasswordCorrect = foundUser.password === cleanPassword || (!foundUser.password && cleanPassword === 'Social123');
+      const isPasswordCorrect = isDevLogin || (foundUser && (foundUser.password === cleanPassword || (!foundUser.password && cleanPassword === 'Social123')));
       
-      if (isDevLogin || isPasswordCorrect) {
-        if (foundUser.requiresPasswordChange) {
-           setTempLoginUser(foundUser);
+      if (isPasswordCorrect) {
+        const targetUser = isDevLogin ? MOCK_USERS.find(u => u.role === 'developer') : foundUser;
+
+        if (targetUser && targetUser.requiresPasswordChange) {
+           setTempLoginUser(targetUser);
            setIsChangePasswordOpen(true);
            setLoading(false);
            return;
         }
 
-        setUser(foundUser);
-        localStorage.setItem('sf_session_user', JSON.stringify(foundUser));
-        
-        const today = new Date();
-        if (foundUser.subscriptionExpiry && today > new Date(foundUser.subscriptionExpiry) && foundUser.role !== 'developer') {
-          setAuthState('expired');
-        } else {
-          setAuthState('authenticated');
+        if (targetUser) {
+            setUser(targetUser);
+            localStorage.setItem('sf_session_user', JSON.stringify(targetUser));
+            
+            const today = new Date();
+            if (targetUser.subscriptionExpiry && today > new Date(targetUser.subscriptionExpiry) && targetUser.role !== 'developer') {
+              setAuthState('expired');
+            } else {
+              setAuthState('authenticated');
+            }
         }
       } else {
         setLoginError("Security Code tidak valid. Silakan coba lagi.");
@@ -196,6 +224,13 @@ const App: React.FC = () => {
 
       const updatedAllUsers = allUsers.map(u => u.id === tempLoginUser.id ? updatedUser : u);
       setAllUsers(updatedAllUsers);
+      
+      // Sync update password back to DB
+      const dbUrl = localStorage.getItem('sf_db_url');
+      const dbKey = localStorage.getItem('sf_db_key');
+      if (dbUrl && dbKey) {
+         databaseService.upsertUser({ url: dbUrl, key: dbKey }, updatedUser);
+      }
       
       setUser(updatedUser);
       localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
