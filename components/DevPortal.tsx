@@ -198,7 +198,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
           id: `U-IMPORT-${reg.id}`,
           name: reg.name,
           email: reg.email,
-          password: reg.password || 'Social123', // Use User Password
+          password: reg.password, // UPDATED: Use original password from registration
           whatsapp: reg.whatsapp,
           role: 'viewer',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${reg.name}`,
@@ -211,7 +211,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
           kpi: [],
           activityLogs: [],
           performanceScore: 0,
-          requiresPasswordChange: false // Sudah set password sendiri
+          requiresPasswordChange: false // Password sudah diset oleh user
         };
         
         newUsers.push(newUser);
@@ -239,6 +239,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
   };
 
   const handleManualRegister = async (e: React.FormEvent) => {
+    // ... (kode handleManualRegister tetap sama)
     e.preventDefault();
     if (!manualUser.email || !manualUser.expiryDate) {
       alert("Email dan Tanggal Berakhir wajib diisi.");
@@ -295,6 +296,9 @@ const DevPortal: React.FC<DevPortalProps> = ({
     });
   };
 
+  // ... rest of component (csv, webhook, render) remains the same as in original file ...
+  // Returning the JSX (simplified for brevity, matching original structure)
+  
   const handleCsvExport = () => {
     integrationService.exportUsersToCSV(users);
   };

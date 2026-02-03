@@ -1,5 +1,5 @@
 
-import { User, RegistrationRequest, Workspace } from '../types';
+import { User, RegistrationRequest, Workspace, ContentPlanItem } from '../types';
 
 /**
  * DATABASE SERVICE (Supabase/PostgreSQL Bridge)
@@ -51,6 +51,33 @@ export const databaseService = {
       console.error("Database Sync Error:", error);
       throw error;
     }
+  },
+
+  /**
+   * Update Password User Realtime
+   */
+  updatePassword: async (config: { url: string; key: string }, userId: string, newPassword: string) => {
+    if (!config.url || !config.key) return;
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/users?user_id=eq.${encodeURIComponent(userId)}`;
+
+    const payload = {
+        password: newPassword,
+        last_updated: new Date().toISOString()
+    };
+
+    const response = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: {
+            'Content-Type': 'application/json',
+            'apikey': config.key,
+            'Authorization': `Bearer ${config.key}`
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error("Gagal update password di database");
+    return true;
   },
 
   /**
@@ -265,6 +292,75 @@ export const databaseService = {
   },
 
   /**
+   * SHARED DATA: Mengambil Content Plans berdasarkan Workspace ID
+   */
+  getContentPlans: async (config: { url: string; key: string }, workspaceId: string): Promise<ContentPlanItem[]> => {
+    if (!config.url || !config.key || !workspaceId) return [];
+    
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/content_plans?workspace_id=eq.${encodeURIComponent(workspaceId)}&order=created_at.desc`;
+    
+    try {
+      const response = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+              'apikey': config.key,
+              'Authorization': `Bearer ${config.key}`,
+          }
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return data.map((d: any) => ({
+          ...d,
+          comments: d.comments ? JSON.parse(d.comments) : []
+      }));
+    } catch (e) { return []; }
+  },
+
+  /**
+   * SHARED DATA: Simpan Content Plan
+   */
+  upsertContentPlan: async (config: { url: string; key: string }, item: ContentPlanItem) => {
+    if (!config.url || !config.key) return;
+
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/content_plans`;
+
+    const payload = {
+        id: item.id,
+        workspace_id: item.workspaceId,
+        creator_id: item.creatorId,
+        title: item.title,
+        status: item.status,
+        platform: item.platform,
+        value: item.value,
+        pillar: item.pillar,
+        type: item.type,
+        description: item.description,
+        post_link: item.postLink,
+        approved_by: item.approvedBy,
+        account_id: item.accountId,
+        post_date: item.postDate,
+        pic: item.pic,
+        comments: JSON.stringify(item.comments || []),
+        created_at: new Date().toISOString()
+    };
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'apikey': config.key,
+            'Authorization': `Bearer ${config.key}`,
+            'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) throw new Error("Gagal menyimpan plan");
+  },
+
+  /**
    * Mendaftarkan user baru ke tabel 'registrations' (Public Registration)
    */
   createRegistration: async (config: { url: string; key: string }, data: any) => {
@@ -359,7 +455,7 @@ CREATE TABLE IF NOT EXISTS registrations (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- TABLE 3: WORKSPACES (New for Code Sharing)
+-- TABLE 3: WORKSPACES
 CREATE TABLE IF NOT EXISTS workspaces (
     id VARCHAR(255) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -369,15 +465,37 @@ CREATE TABLE IF NOT EXISTS workspaces (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- TABLE 4: CONTENT PLANS (SHARED DATA)
+CREATE TABLE IF NOT EXISTS content_plans (
+    id VARCHAR(255) PRIMARY KEY,
+    workspace_id VARCHAR(255),
+    creator_id VARCHAR(255),
+    title TEXT,
+    status VARCHAR(50),
+    platform VARCHAR(50),
+    value TEXT,
+    pillar TEXT,
+    type VARCHAR(50),
+    description TEXT,
+    post_link TEXT,
+    approved_by VARCHAR(255),
+    account_id VARCHAR(255),
+    post_date DATE,
+    pic VARCHAR(255),
+    comments TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- INDEXES
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_ws_code ON workspaces(invite_code);
+CREATE INDEX IF NOT EXISTS idx_cp_ws ON content_plans(workspace_id);
 
 -- SECURITY SETTINGS (DISABLE RLS FOR APP ACCESS)
--- Jalankan ini jika Anda mengalami error "new row violates row-level security policy"
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE workspaces DISABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations DISABLE ROW LEVEL SECURITY;
+ALTER TABLE content_plans DISABLE ROW LEVEL SECURITY;
     `.trim();
   }
 };

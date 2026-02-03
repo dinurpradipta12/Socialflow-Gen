@@ -690,6 +690,7 @@ const App: React.FC = () => {
                accounts={accounts}
                setAccounts={setAccounts}
                targetContentId={targetContentId}
+               workspaceId={activeWorkspace.id} // Added: Shared data access
              />
            )}
            {activeTab === 'calendar' && !isDev && activeWorkspace && <Calendar primaryColor={activeWorkspace.color} />}

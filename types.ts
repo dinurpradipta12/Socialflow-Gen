@@ -103,6 +103,7 @@ export interface Comment {
 
 export interface ContentPlanItem {
   id: string;
+  workspaceId?: string; // NEW: For data sharing
   creatorId?: string; 
   status: 'Menunggu Review' | 'Drafting' | 'Dijadwalkan' | 'Diposting' | 'Revisi' | 'Reschedule' | 'Dibatalkan';
   platform: 'Instagram' | 'TikTok' | 'YouTube'; 

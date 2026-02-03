@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ContentPlanItem, PostInsight, User, Comment, SystemNotification, SocialAccount } from '../types';
-import { MOCK_CONTENT_PLANS } from '../constants';
+import { MOCK_CONTENT_PLANS, SUPABASE_CONFIG } from '../constants';
 import { scrapePostInsights } from '../services/geminiService';
-import { Plus, ChevronDown, FileText, Link as LinkIcon, ExternalLink, X, Save, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send, Edit, Trash2, Calendar, Smile, CheckCircle, Upload, MoreHorizontal, Settings, ChevronRight, Edit3, PlayCircle } from 'lucide-react';
+import { databaseService } from '../services/databaseService';
+import { Plus, ChevronDown, FileText, Link as LinkIcon, ExternalLink, X, Save, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send, Edit, Trash2, Calendar, Smile, CheckCircle, Upload, MoreHorizontal, Settings, ChevronRight, Edit3, PlayCircle, RefreshCw } from 'lucide-react';
 
 interface ContentPlanProps {
   primaryColorHex: string;
@@ -14,19 +15,23 @@ interface ContentPlanProps {
   accounts: SocialAccount[];
   setAccounts: (accounts: SocialAccount[]) => void;
   targetContentId?: string | null;
+  workspaceId: string; // NEW PROP: Essential for shared data
 }
 
 const DEFAULT_STATUS_OPTIONS = ['Menunggu Review', 'Drafting', 'Dijadwalkan', 'Diposting', 'Revisi', 'Reschedule', 'Dibatalkan'];
 const EMOJIS = ['👍', '🔥', '❤️', '😂', '😮', '😢', '👏', '🎉', '✅', '❌'];
 
-const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight, users, addNotification, currentUser, accounts, setAccounts, targetContentId }) => {
-  const [items, setItems] = useState<ContentPlanItem[]>(MOCK_CONTENT_PLANS);
+const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight, users, addNotification, currentUser, accounts, setAccounts, targetContentId, workspaceId }) => {
+  const [items, setItems] = useState<ContentPlanItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
   const [detailedViewItem, setDetailedViewItem] = useState<ContentPlanItem | null>(null);
-  const processedTargetId = useRef<string | null>(null); // Ref untuk melacak ID yang sudah diproses agar tidak popup berulang
+  const processedTargetId = useRef<string | null>(null); 
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Filters
   const [filterApprovedBy, setFilterApprovedBy] = useState<string>('All');
@@ -85,15 +90,37 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     title: '', platform: 'Instagram', value: 'Awareness', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', pic: '', scriptUrl: '', visualUrl: '', status: 'Menunggu Review', postDate: ''
   });
 
+  const getDbConfig = () => ({
+    url: localStorage.getItem('sf_db_url') || SUPABASE_CONFIG.url,
+    key: localStorage.getItem('sf_db_key') || SUPABASE_CONFIG.key
+  });
+
+  // FETCH DATA ON MOUNT
+  const fetchData = async () => {
+    setIsLoading(true);
+    const dbConfig = getDbConfig();
+    try {
+        const sharedPlans = await databaseService.getContentPlans(dbConfig, workspaceId);
+        setItems(sharedPlans);
+    } catch (e) {
+        console.error("Fetch Plan Error", e);
+        // Fallback or Alert? For now, empty or maybe local mock
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [workspaceId]);
+
   // Effect to handle Deep Linking from Notification
   useEffect(() => {
-      // Hanya buka popup jika ada targetContentId DAN ID tersebut belum diproses (atau berbeda dari yang terakhir diproses)
-      if (targetContentId && targetContentId !== processedTargetId.current) {
+      if (targetContentId && targetContentId !== processedTargetId.current && items.length > 0) {
           const item = items.find(i => i.id === targetContentId);
           if (item) {
               setDetailedViewItem(item);
-              processedTargetId.current = targetContentId; // Tandai ID ini sudah diproses
-              // Ensure we switch to the right account tab
+              processedTargetId.current = targetContentId; 
               if (item.accountId && item.accountId !== activeAccount) {
                   setActiveAccount(item.accountId);
               }
@@ -125,18 +152,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       localStorage.setItem('sf_pic_options', JSON.stringify(picOptions));
   }, [picOptions]);
 
-  // Auto-save logic
-  useEffect(() => {
-    let intervalId: any;
-    if (isModalOpen) {
-      intervalId = setInterval(() => {
-        if (formData.title.trim().length > 0) {
-          setLastAutoSave(new Date().toLocaleTimeString('id-ID'));
-        }
-      }, 30000);
-    }
-    return () => clearInterval(intervalId);
-  }, [isModalOpen, formData]);
 
   const handleAddStatus = (e: React.FormEvent) => {
       e.preventDefault();
@@ -199,54 +214,86 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
+    const dbConfig = getDbConfig();
+
+    let finalItem: ContentPlanItem;
+
     if (editingItem) {
-      const updatedItem = { ...editingItem, ...formData };
-      setItems(items.map(i => i.id === editingItem.id ? updatedItem : i));
-      if (detailedViewItem?.id === editingItem.id) setDetailedViewItem(updatedItem);
+      finalItem = { ...editingItem, ...formData, workspaceId };
     } else {
-      const newItem: ContentPlanItem = { 
-        id: Date.now().toString(), 
+      finalItem = { 
+        id: `CP-${Date.now()}`, 
+        workspaceId,
         creatorId: currentUser.id,
         ...formData, 
-        // Initial create: ApprovedBy is empty unless explicit (logic: usually empty on create)
         approvedBy: '',
         status: 'Menunggu Review',
         accountId: activeAccount, 
         comments: [] 
       };
-      setItems([newItem, ...items]);
     }
-    setIsModalOpen(false);
-    setEditingItem(null);
-    setFormData({ title: '', platform: 'Instagram', value: 'Awareness', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', pic: '', scriptUrl: '', visualUrl: '', status: 'Menunggu Review', postDate: '' });
+
+    try {
+        await databaseService.upsertContentPlan(dbConfig, finalItem);
+        
+        // Optimistic UI Update
+        if (editingItem) {
+            setItems(items.map(i => i.id === editingItem.id ? finalItem : i));
+            if (detailedViewItem?.id === editingItem.id) setDetailedViewItem(finalItem);
+        } else {
+            setItems([finalItem, ...items]);
+        }
+
+        setIsModalOpen(false);
+        setEditingItem(null);
+        setFormData({ title: '', platform: 'Instagram', value: 'Awareness', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', pic: '', scriptUrl: '', visualUrl: '', status: 'Menunggu Review', postDate: '' });
+    } catch (err) {
+        alert("Gagal menyimpan rencana konten. Periksa koneksi.");
+        console.error(err);
+    } finally {
+        setIsSaving(false);
+    }
   };
 
-  const updateItemStatus = (itemId: string, newStatus: string) => {
-      const updatedItems = items.map(i => i.id === itemId ? { ...i, status: newStatus as any } : i);
-      setItems(updatedItems);
-      if (detailedViewItem && detailedViewItem.id === itemId) {
-          setDetailedViewItem({ ...detailedViewItem, status: newStatus as any });
-      }
+  const updateItemStatus = async (itemId: string, newStatus: string) => {
+      const dbConfig = getDbConfig();
+      const targetItem = items.find(i => i.id === itemId);
+      if(!targetItem) return;
+
+      const updatedItem = { ...targetItem, status: newStatus as any };
+      
+      try {
+          // Update Local
+          setItems(items.map(i => i.id === itemId ? updatedItem : i));
+          if (detailedViewItem && detailedViewItem.id === itemId) setDetailedViewItem(updatedItem);
+          // Sync DB
+          await databaseService.upsertContentPlan(dbConfig, updatedItem);
+      } catch (e) { console.error(e); }
   };
 
-  const handleApproveContent = () => {
+  const handleApproveContent = async () => {
       if (detailedViewItem) {
+          const dbConfig = getDbConfig();
           const updatedItem: ContentPlanItem = { 
             ...detailedViewItem, 
             approvedBy: currentUser.name,
-            // If status was Menunggu Review, change to Drafting (Approved)
             status: detailedViewItem.status === 'Menunggu Review' ? 'Drafting' : detailedViewItem.status
           };
-          setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
-          setDetailedViewItem(updatedItem);
-          addNotification({
-              senderName: currentUser.name,
-              messageText: `Approved content: "${updatedItem.title}"`,
-              type: 'success',
-              targetContentId: updatedItem.id
-          });
+
+          try {
+            await databaseService.upsertContentPlan(dbConfig, updatedItem);
+            setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
+            setDetailedViewItem(updatedItem);
+            addNotification({
+                senderName: currentUser.name,
+                messageText: `Approved content: "${updatedItem.title}"`,
+                type: 'success',
+                targetContentId: updatedItem.id
+            });
+          } catch (e) { alert("Gagal approve"); }
       }
   };
 
@@ -269,8 +316,10 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     }
   };
 
-  const handlePostComment = (itemId: string) => {
+  const handlePostComment = async (itemId: string) => {
       if (!commentText.trim()) return;
+      const dbConfig = getDbConfig();
+      
       const newComment: Comment = {
           id: Date.now().toString(),
           userId: currentUser.id,
@@ -278,38 +327,48 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           text: commentText,
           timestamp: new Date().toISOString()
       };
-      const updatedItems = items.map(i => {
-          if (i.id === itemId) {
-              const updated = { ...i, comments: [...(i.comments || []), newComment] };
-              if (detailedViewItem?.id === i.id) setDetailedViewItem(updated);
-              return updated;
-          }
-          return i;
-      });
-      setItems(updatedItems);
-
-      const item = items.find(i => i.id === itemId);
       
-      // NOTIFICATION LOGIC: Only notify if I am NOT the creator
-      if (item && item.creatorId && item.creatorId !== currentUser.id) {
-          addNotification({
-              senderName: currentUser.name,
-              messageText: `Mengomentari konten Anda: "${item.title}"`,
-              targetContentId: item.id, // IMPORTANT for deep linking
-              type: 'info'
-          });
-      }
+      const targetItem = items.find(i => i.id === itemId);
+      if(!targetItem) return;
+
+      const updatedItem = { ...targetItem, comments: [...(targetItem.comments || []), newComment] };
+
+      try {
+          setItems(items.map(i => i.id === itemId ? updatedItem : i));
+          if(detailedViewItem?.id === itemId) setDetailedViewItem(updatedItem);
+          
+          await databaseService.upsertContentPlan(dbConfig, updatedItem);
+
+          // Notification Logic
+          if (targetItem.creatorId && targetItem.creatorId !== currentUser.id) {
+            addNotification({
+                senderName: currentUser.name,
+                messageText: `Mengomentari konten Anda: "${targetItem.title}"`,
+                targetContentId: targetItem.id, 
+                type: 'info'
+            });
+          }
+      } catch (e) { console.error(e); }
       
       setCommentText('');
       setShowEmojiPicker(false);
   };
 
-  const handleUpdateLink = (itemId: string) => {
-      const updatedItems = items.map(i => i.id === itemId ? { ...i, postLink: tempLink } : i);
-      setItems(updatedItems);
-      if (detailedViewItem && detailedViewItem.id === itemId) {
-          setDetailedViewItem({ ...detailedViewItem, postLink: tempLink });
-      }
+  const handleUpdateLink = async (itemId: string) => {
+      const dbConfig = getDbConfig();
+      const targetItem = items.find(i => i.id === itemId);
+      if(!targetItem) return;
+
+      const updatedItem = { ...targetItem, postLink: tempLink };
+      
+      try {
+          await databaseService.upsertContentPlan(dbConfig, updatedItem);
+          setItems(items.map(i => i.id === itemId ? updatedItem : i));
+          if (detailedViewItem && detailedViewItem.id === itemId) {
+              setDetailedViewItem(updatedItem);
+          }
+      } catch (e) { console.error(e); }
+      
       setIsEditingLink(false);
   };
 
@@ -355,7 +414,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Konten Plan</h1>
-          <p className="text-gray-400 font-medium">Strategi & Manajemen Konten Arunika.</p>
+          <p className="text-gray-400 font-medium flex items-center gap-2">
+             Strategi & Manajemen Konten Arunika. 
+             <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1">
+                <RefreshCw size={10} className={isLoading ? "animate-spin" : ""} /> {isLoading ? 'Syncing...' : 'Live Synced'}
+             </span>
+          </p>
         </div>
         
         {/* NEW CLEAN FILTER UI */}
@@ -496,7 +560,13 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                     </div>
                  </div>
 
-                 <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2"><button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-gray-100 text-gray-400 font-black uppercase text-[10px] tracking-widest rounded-2xl active:scale-95 transition-all">Batal</button><button type="submit" className="flex-[2] py-5 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all hover:bg-blue-700">Simpan Perencanaan</button></div>
+                 <div className="flex gap-4 pt-4 sticky bottom-0 bg-white pb-2">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 bg-gray-100 text-gray-400 font-black uppercase text-[10px] tracking-widest rounded-2xl active:scale-95 transition-all">Batal</button>
+                    <button type="submit" disabled={isSaving} className="flex-[2] py-5 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl shadow-blue-200 active:scale-95 transition-all hover:bg-blue-700 flex justify-center gap-2">
+                        {isSaving && <Loader2 size={16} className="animate-spin" />}
+                        Simpan Perencanaan
+                    </button>
+                 </div>
               </form>
            </div>
         </div>
@@ -803,7 +873,9 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                ))}
                {filteredItems.length === 0 && (
                  <tr>
-                   <td colSpan={6} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest">Tidak ada perencanaan ditemukan</td>
+                   <td colSpan={6} className="py-20 text-center text-gray-300 font-bold uppercase text-[10px] tracking-widest">
+                       {isLoading ? <span className="flex items-center justify-center gap-2"><Loader2 className="animate-spin"/> Syncing Database...</span> : "Tidak ada perencanaan ditemukan"}
+                   </td>
                  </tr>
                )}
             </tbody>
