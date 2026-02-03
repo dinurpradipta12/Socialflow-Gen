@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { User, ThemeColor, ActivityLog } from '../types';
+import { User, ThemeColor, ActivityLog, Workspace } from '../types';
 import { THEME_COLORS } from '../constants';
 import { 
   User as UserIcon, 
@@ -11,16 +12,22 @@ import {
   Save,
   Instagram,
   AlertCircle,
-  FileText
+  FileText,
+  Building2,
+  Repeat,
+  Check
 } from 'lucide-react';
 
 interface ProfileProps {
   user: User;
   primaryColor: ThemeColor;
   setUser: (user: User) => void;
+  allWorkspaces: Workspace[];
+  allProfiles: User[]; // All user objects sharing the same email
+  onSwitchProfile: (user: User) => void;
 }
 
-const Profile: React.FC<ProfileProps> = ({ user, primaryColor, setUser }) => {
+const Profile: React.FC<ProfileProps> = ({ user, primaryColor, setUser, allWorkspaces, allProfiles, onSwitchProfile }) => {
   const colorSet = THEME_COLORS[primaryColor];
   const [isEditing, setIsEditing] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -41,6 +48,7 @@ const Profile: React.FC<ProfileProps> = ({ user, primaryColor, setUser }) => {
 
   if (!user) return null;
 
+  const currentWorkspace = allWorkspaces.find(w => w.id === user.workspaceId);
   const lastCheckin = [...user.activityLogs].reverse().find(l => l.type === 'checkin');
   const isCheckedIn = lastCheckin && ![...user.activityLogs].reverse().find(l => l.type === 'checkout' && new Date(l.timestamp) > new Date(lastCheckin.timestamp));
   const canCheckout = isCheckedIn && (Date.now() - new Date(lastCheckin.timestamp).getTime()) >= 3600000; 
@@ -76,12 +84,9 @@ const Profile: React.FC<ProfileProps> = ({ user, primaryColor, setUser }) => {
              <h1 className="text-5xl font-black text-gray-900 tracking-tight leading-none">{profileData.name}</h1>
           </div>
           <div className="flex flex-wrap justify-center md:justify-start gap-6 text-gray-400 font-black uppercase text-[10px] tracking-widest">
+            <span className="flex items-center gap-2 text-gray-900"><Building2 size={16} className="text-gray-400"/> {currentWorkspace?.name}</span>
             <span className="flex items-center gap-2"><Briefcase size={16} className="text-[var(--primary-color)]"/> {user.role}</span>
             <span className="flex items-center gap-2 text-blue-600"><Instagram size={16}/> {profileData.socialMedia || '@snaillabs'}</span>
-            <div className="flex items-center gap-2">
-               <Clock size={16} className="text-emerald-500"/>
-               <span className="text-gray-900">{currentTime.toLocaleTimeString('id-ID')} WIB</span>
-            </div>
           </div>
           
           <div className="flex gap-4 justify-center md:justify-start pt-4">
@@ -97,9 +102,30 @@ const Profile: React.FC<ProfileProps> = ({ user, primaryColor, setUser }) => {
           </div>
         </div>
 
-        <div className="hidden lg:flex flex-col items-center justify-center p-8 bg-gray-50 rounded-[3rem] border border-gray-100 min-w-[200px] z-10">
-           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Performance</p>
-           <p className={`text-6xl font-black ${user.performanceScore > 80 ? 'text-emerald-500' : 'text-amber-500'}`}>{user.performanceScore}%</p>
+        {/* Profile Switcher Panel */}
+        <div className="hidden lg:flex flex-col items-start p-6 bg-gray-50/50 rounded-[3rem] border border-gray-100 min-w-[280px] z-10 self-stretch">
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2 px-2">
+               <Repeat size={12}/> Switch Workspace
+           </p>
+           <div className="flex-1 w-full space-y-2 overflow-y-auto custom-scrollbar pr-1 max-h-48">
+               {allProfiles.map(p => {
+                   const wsName = allWorkspaces.find(w => w.id === p.workspaceId)?.name || 'Unknown WS';
+                   const isActive = p.id === user.id;
+                   return (
+                       <button 
+                        key={p.id} 
+                        onClick={() => !isActive && onSwitchProfile(p)}
+                        className={`w-full p-3 rounded-2xl text-left transition-all flex items-center justify-between ${isActive ? 'bg-white shadow-sm border border-gray-100 ring-1 ring-black/5' : 'hover:bg-gray-100 opacity-60 hover:opacity-100'}`}
+                       >
+                           <div>
+                               <p className="text-xs font-bold text-gray-900 truncate max-w-[150px]">{wsName}</p>
+                               <p className="text-[9px] text-gray-400 uppercase tracking-wide">{p.jobdesk}</p>
+                           </div>
+                           {isActive && <Check size={14} className="text-emerald-500"/>}
+                       </button>
+                   )
+               })}
+           </div>
         </div>
       </div>
 
@@ -115,7 +141,7 @@ const Profile: React.FC<ProfileProps> = ({ user, primaryColor, setUser }) => {
                   <input disabled={!isEditing} type="text" value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-[2.5rem] font-bold text-gray-900 transition-all" />
                </div>
                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Jobdesk Utama</label>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Jobdesk Utama (Di Workspace Ini)</label>
                   <input disabled={!isEditing} type="text" value={profileData.jobdesk} onChange={e => setProfileData({...profileData, jobdesk: e.target.value})} className="w-full px-7 py-5 bg-gray-50 border border-gray-100 rounded-[2.5rem] font-bold text-gray-900 transition-all" />
                </div>
             </div>

@@ -118,30 +118,36 @@ export const MOCK_CONTENT_PLANS: ContentPlanItem[] = [
   { 
     id: 'cp1', 
     title: 'Strategi Q4 Arunika', 
-    status: 'Drafting', 
+    status: 'Drafting',
+    platform: 'Instagram', 
     value: 'Educational', 
     pillar: 'Marketing', 
     type: 'Reels', 
+    pic: 'Owner Arunika',
     description: 'Strategi konten untuk akhir tahun.', 
     postLink: 'https://instagram.com/arunika', 
     approvedBy: 'Owner Arunika',
     accountId: 'account-1', // Default account
-    comments: []
+    comments: [],
+    postDate: '2023-10-25'
   },
   { 
     id: 'cp2', 
     title: 'Testimoni User', 
     status: 'Diposting', 
+    platform: 'TikTok',
     value: 'Engagement', 
     pillar: 'Community', 
     type: 'Carousel', 
+    pic: 'Arunika Dev',
     description: 'Sharing apa kata mereka.', 
     postLink: 'https://instagram.com/p/mock123', 
-    approvedBy: 'Owner Arunika',
+    approvedBy: '',
     accountId: 'account-1',
     comments: [
       { id: 'cm1', userId: '1', userName: 'Owner Arunika', text: 'Tolong revisi slide ke-3 ya, font terlalu kecil.', timestamp: '2023-10-26T10:00:00Z' }
-    ]
+    ],
+    postDate: '2023-10-26'
   }
 ];
 

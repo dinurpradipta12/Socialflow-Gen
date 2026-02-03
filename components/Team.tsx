@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, ThemeColor, Permissions, SystemNotification, Workspace } from '../types';
 import { THEME_COLORS } from '../constants';
-import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Trash2, Key, Target, CheckSquare, Plus, Copy, Link as LinkIcon } from 'lucide-react';
+import { Shield, ShieldCheck, UserPlus, MoreVertical, Check, X, Edit3, Trash2, Key, Target, CheckSquare, Plus, Copy, Link as LinkIcon, LogIn } from 'lucide-react';
 
 interface TeamProps {
   primaryColor: ThemeColor;
@@ -13,9 +13,10 @@ interface TeamProps {
   allUsers: User[];
   setUsers: (users: User[]) => void;
   setWorkspace: (ws: Workspace) => void;
+  onJoinAnotherWorkspace: () => void;
 }
 
-const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpdateWorkspace, addSystemNotification, allUsers, setUsers, setWorkspace }) => {
+const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpdateWorkspace, addSystemNotification, allUsers, setUsers, setWorkspace, onJoinAnotherWorkspace }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [newKpi, setNewKpi] = useState('');
@@ -31,8 +32,10 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
     if (confirm("Hapus member ini secara permanen dari Workspace?")) {
       const updatedMembers = workspace.members.filter(m => m.id !== userId);
       setWorkspace({ ...workspace, members: updatedMembers });
-      // Hapus workspaceId dari user di database global
-      setUsers(allUsers.map(u => u.id === userId ? { ...u, workspaceId: undefined } : u));
+      // Hapus workspaceId dari user di database global (or rather, remove the user profile completely from this workspace context)
+      // Since our model creates new profile objects, we can just remove them from the member list.
+      // But to be consistent with global state:
+      // setUsers(allUsers.filter(u => u.id !== userId)); // This deletes the profile
     }
   };
 
@@ -72,33 +75,42 @@ const Team: React.FC<TeamProps> = ({ primaryColor, currentUser, workspace, onUpd
   };
 
   const copyInviteLink = () => {
-      const link = `${window.location.origin}/join/${workspace.inviteCode}`;
+      const link = `${window.location.origin}/?join=${workspace.inviteCode}`;
       navigator.clipboard.writeText(link);
-      alert("Link Invite berhasil disalin ke clipboard!");
+      alert(`Link Invite berhasil disalin:\n${link}`);
   };
 
   return (
     <div className="space-y-8 animate-slide">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Team Hub</h1>
-          <p className="text-gray-400 mt-1 font-medium">Kelola hak akses dan performa tim di Workspace {workspace.name}.</p>
+          <p className="text-gray-400 mt-1 font-medium">Kelola hak akses dan performa tim di Workspace <span className="text-gray-900 font-bold">{workspace.name}</span>.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+            <button 
+              onClick={onJoinAnotherWorkspace}
+              className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-gray-600"
+            >
+              <LogIn size={16} />
+              <span>Join Other WS</span>
+            </button>
             <button 
               onClick={copyInviteLink}
-              className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-gray-600"
+              className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-200 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm hover:bg-gray-50 active:scale-95 transition-all text-blue-600"
             >
-              <LinkIcon size={18} />
-              <span>Copy Link</span>
+              <LinkIcon size={16} />
+              <span>Copy Invite</span>
             </button>
-            <button 
-              onClick={() => setIsInviteModalOpen(true)}
-              className={`flex items-center gap-2 px-8 py-4 ${colorSet.bg} ${colorSet.text} rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-sm active:scale-95 transition-all`}
-            >
-              <UserPlus size={18} />
-              <span>Invite Member</span>
-            </button>
+            {isOwner && (
+                <button 
+                onClick={() => setIsInviteModalOpen(true)}
+                className={`flex items-center gap-2 px-8 py-4 ${colorSet.bg} ${colorSet.text} rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-xl active:scale-95 transition-all`}
+                >
+                <UserPlus size={18} />
+                <span>Add Member</span>
+                </button>
+            )}
         </div>
       </div>
 

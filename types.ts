@@ -48,7 +48,7 @@ export interface User {
   socialMedia?: string;
   birthDate?: string;
   settings?: UserSettings;
-  workspaceId?: string;
+  workspaceId?: string; // ID Workspace tempat profil ini berada
   requiresPasswordChange?: boolean;
 }
 
@@ -81,7 +81,9 @@ export interface RegistrationRequest {
   timestamp: string;
   status: 'pending' | 'approved' | 'rejected';
   nodeId: string;
-  workspaceChoice?: 'join' | 'create'; // New field
+  workspaceChoice?: 'join' | 'create'; 
+  targetWorkspaceId?: string; // If joining
+  newWorkspaceName?: string; // If creating
 }
 
 export interface Message {
@@ -101,8 +103,10 @@ export interface Comment {
 
 export interface ContentPlanItem {
   id: string;
-  creatorId?: string; // ID user pembuat konten
-  status: 'Drafting' | 'Dijadwalkan' | 'Diposting' | 'Revisi' | 'Reschedule' | 'Dibatalkan';
+  creatorId?: string; 
+  status: 'Menunggu Review' | 'Drafting' | 'Dijadwalkan' | 'Diposting' | 'Revisi' | 'Reschedule' | 'Dibatalkan';
+  platform: 'Instagram' | 'TikTok' | 'YouTube'; 
+  pic?: string; 
   value: string;
   pillar: string;
   type: string;
@@ -112,8 +116,8 @@ export interface ContentPlanItem {
   postLink: string;
   description: string;
   approvedBy?: string;
-  accountId?: string; // Untuk multi-akun (e.g., 'account-1', 'account-2')
-  postDate?: string; // Tanggal posting
+  accountId?: string; 
+  postDate?: string; 
   comments?: Comment[];
 }
 
@@ -138,7 +142,7 @@ export interface Workspace {
   id: string;
   name: string;
   color: ThemeColor;
-  members: User[];
+  members: User[]; // Array of users who have profiles in this workspace
   inviteCode: string;
   ownerId: string;
 }
@@ -159,10 +163,9 @@ export interface SystemNotification {
   timestamp: string;
   read: boolean;
   type?: 'info' | 'warning' | 'success';
-  targetContentId?: string; // ID konten untuk deep linking
+  targetContentId?: string; 
 }
 
-// New Types for Dashboard Analytics
 export interface AccountAnalytics {
   username: string;
   platform: 'Instagram' | 'TikTok';
