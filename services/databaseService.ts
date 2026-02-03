@@ -50,6 +50,55 @@ export const databaseService = {
   },
 
   /**
+   * Mengambil SELURUH data user dari Database (Realtime Fetch)
+   */
+  getAllUsers: async (config: { url: string; key: string }): Promise<User[]> => {
+    if (!config.url || !config.key) return [];
+
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/users?select=*&order=last_updated.desc`;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'apikey': config.key,
+          'Authorization': `Bearer ${config.key}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) throw new Error("Gagal mengambil data users");
+      
+      const data = await response.json();
+      
+      // Mapping DB Row to Application User Object
+      return data.map((dbUser: any) => ({
+        id: dbUser.user_id,
+        name: dbUser.full_name,
+        email: dbUser.email,
+        password: dbUser.password || 'Social123',
+        role: dbUser.role as any,
+        whatsapp: dbUser.whatsapp,
+        status: dbUser.status,
+        subscriptionExpiry: dbUser.subscription_expiry,
+        performanceScore: dbUser.performance_score,
+        // Default properties that might not be in DB yet
+        permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
+        isSubscribed: true,
+        jobdesk: 'Member',
+        kpi: [],
+        activityLogs: [],
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${dbUser.full_name}`
+      }));
+
+    } catch (error) {
+      console.error("Get All Users Error:", error);
+      throw error;
+    }
+  },
+
+  /**
    * Mengambil data user berdasarkan email untuk Login Check
    */
   getUserByEmail: async (config: { url: string; key: string }, email: string): Promise<User | null> => {

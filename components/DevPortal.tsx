@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, RegistrationRequest } from '../types';
-import { Database, RefreshCw, Zap, CheckCircle, XCircle, ShieldCheck, Mail, Clock, Globe, Download, Cloud, Radio, UserPlus, Phone, Calendar, AlertCircle, Key, RefreshCcw, Send, Trash2, Edit, ChevronRight, UserCheck, Loader2, Link as LinkIcon, FileSpreadsheet, Share2, Server, Copy, Terminal, CloudLightning, ArrowDownToLine } from 'lucide-react';
+import { Database, RefreshCw, Zap, CheckCircle, XCircle, ShieldCheck, Mail, Clock, Globe, Download, Cloud, Radio, UserPlus, Phone, Calendar, AlertCircle, Key, RefreshCcw, Send, Trash2, Edit, ChevronRight, UserCheck, Loader2, Link as LinkIcon, FileSpreadsheet, Share2, Server, Copy, Terminal, CloudLightning, ArrowDownToLine, Wifi, WifiOff } from 'lucide-react';
 import { mailService } from '../services/mailService';
 import { integrationService } from '../services/integrationService';
 import { databaseService } from '../services/databaseService';
@@ -25,18 +25,20 @@ const DevPortal: React.FC<DevPortalProps> = ({
   const [isDispatching, setIsDispatching] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<{[key: string]: 'idle' | 'sending' | 'sent' | 'error'}>({});
   
-  // Integration States
-  const [webhookUrl, setWebhookUrl] = useState(() => localStorage.getItem('sf_webhook_url') || '');
-  const [isWebhookTesting, setIsWebhookTesting] = useState(false);
-
-  // Database States
+  // Database & Connection States
   const [dbConfig, setDbConfig] = useState({
     url: localStorage.getItem('sf_db_url') || '',
     key: localStorage.getItem('sf_db_key') || ''
   });
+  const [dbStatus, setDbStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [isDbSyncing, setIsDbSyncing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
   const [syncProgress, setSyncProgress] = useState(0);
+  const [displayedUsers, setDisplayedUsers] = useState<User[]>(users); // Users to display in table
+
+  // Integration States
+  const [webhookUrl, setWebhookUrl] = useState(() => localStorage.getItem('sf_webhook_url') || '');
+  const [isWebhookTesting, setIsWebhookTesting] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('sf_webhook_url', webhookUrl);
@@ -46,6 +48,56 @@ const DevPortal: React.FC<DevPortalProps> = ({
     localStorage.setItem('sf_db_url', dbConfig.url);
     localStorage.setItem('sf_db_key', dbConfig.key);
   }, [dbConfig]);
+
+  // Initial Connection Check
+  useEffect(() => {
+    if (dbConfig.url && dbConfig.key) {
+        checkDbConnection();
+    } else {
+        setDbStatus('offline');
+    }
+  }, []);
+
+  // Sync displayed users with prop users when on other tabs, 
+  // but if on 'users' tab and connected, we might want to show DB users (handled in checkDbConnection/Refresh)
+  useEffect(() => {
+    if (activeSubTab !== 'users') {
+        setDisplayedUsers(users);
+    }
+  }, [users, activeSubTab]);
+
+  const checkDbConnection = async () => {
+    setDbStatus('checking');
+    try {
+        // Try fetching users as a ping
+        const dbUsers = await databaseService.getAllUsers(dbConfig);
+        setDbStatus('online');
+        // If we are active on Users tab, update the view with Real Data
+        if (activeSubTab === 'users') {
+            setDisplayedUsers(dbUsers);
+        }
+    } catch (e) {
+        setDbStatus('offline');
+        console.error("DB Connection Check Failed", e);
+    }
+  };
+
+  const handleRefreshDb = async () => {
+    if (!dbConfig.url || !dbConfig.key) return alert("Setup Database terlebih dahulu.");
+    setIsDbSyncing(true);
+    try {
+        const dbUsers = await databaseService.getAllUsers(dbConfig);
+        setDisplayedUsers(dbUsers);
+        setDbStatus('online');
+        alert("Database Refreshed! Data terbaru berhasil dimuat.");
+    } catch (e) {
+        setDbStatus('offline');
+        alert("Gagal terhubung ke Database. Cek koneksi atau Key.");
+    } finally {
+        setIsDbSyncing(false);
+    }
+  };
+
   
   // State Form Manual
   const [manualUser, setManualUser] = useState({
@@ -262,6 +314,16 @@ const DevPortal: React.FC<DevPortalProps> = ({
   return (
     <div className="space-y-8 animate-slide pb-20">
       <div className="bg-slate-950 p-8 md:p-12 rounded-[2.5rem] md:rounded-[4rem] text-white relative overflow-hidden shadow-2xl">
+        {/* Status Indicator Overlay */}
+        <div className="absolute top-8 right-8 flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 z-20">
+            {dbStatus === 'checking' && <Loader2 size={16} className="text-amber-400 animate-spin" />}
+            {dbStatus === 'online' && <Wifi size={16} className="text-emerald-400" />}
+            {dbStatus === 'offline' && <WifiOff size={16} className="text-rose-400" />}
+            <span className="text-[10px] font-black uppercase tracking-widest">
+                DB Status: {dbStatus === 'online' ? 'Connected' : dbStatus === 'offline' ? 'Disconnected' : 'Checking...'}
+            </span>
+        </div>
+
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
            <div className="space-y-4">
               <div className="inline-flex px-4 py-1.5 rounded-full bg-blue-500/20 border border-blue-500/50 text-blue-400 text-[9px] font-black uppercase tracking-widest items-center gap-2">
@@ -274,13 +336,13 @@ const DevPortal: React.FC<DevPortalProps> = ({
            <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 overflow-x-auto max-w-full">
               <button 
                 onClick={() => setActiveSubTab('manual')}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'manual' ? 'bg-blue-50 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'manual' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
               >
                  Manual Provision
               </button>
               <button 
-                onClick={() => setActiveSubTab('users')}
-                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-blue-50 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                onClick={() => { setActiveSubTab('users'); if(dbStatus==='online') checkDbConnection(); }}
+                className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === 'users' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
               >
                  Active Users DB
               </button>
@@ -376,14 +438,25 @@ const DevPortal: React.FC<DevPortalProps> = ({
         </section>
       )}
 
-      {/* Users & Database Tab remains same logic ... */}
       {activeSubTab === 'users' && (
         <section className="space-y-6 animate-slide">
            {/* ... existing Users table ... */}
            <div className="flex justify-between items-center px-6">
-              <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Master User Database</h3>
+              <div className="flex items-center gap-3">
+                 <h3 className="text-xs font-black text-gray-400 uppercase tracking-[0.3em]">Master User Database</h3>
+                 {dbStatus === 'online' && (
+                     <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-emerald-100">Live DB Connected</span>
+                 )}
+              </div>
               <div className="flex gap-2">
-                 <button className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400">Total Nodes: {users.length}</button>
+                 <button 
+                    onClick={handleRefreshDb}
+                    disabled={isDbSyncing}
+                    className="px-4 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-blue-500 flex items-center gap-2 transition-all"
+                 >
+                    <RefreshCw size={12} className={isDbSyncing ? "animate-spin" : ""} /> {isDbSyncing ? "Refreshing..." : "Refresh Database"}
+                 </button>
+                 <button className="px-4 py-2 bg-white border border-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-400">Total Nodes: {displayedUsers.length}</button>
               </div>
            </div>
            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden overflow-x-auto">
@@ -399,7 +472,7 @@ const DevPortal: React.FC<DevPortalProps> = ({
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
-                    {users.map(u => {
+                    {displayedUsers.map(u => {
                       return (
                        <tr key={u.id} className={`hover:bg-gray-50/50 transition-all`}>
                           <td className="px-8 py-6">
