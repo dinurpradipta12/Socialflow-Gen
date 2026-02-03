@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, RegistrationRequest } from '../types';
-import { Database, RefreshCw, Zap, CheckCircle, XCircle, ShieldCheck, Mail, Clock, Globe, Download, Cloud, Radio, UserPlus, Phone, Calendar, AlertCircle, Key, RefreshCcw, Send, Trash2, Edit, ChevronRight, UserCheck, Loader2, Link as LinkIcon, FileSpreadsheet, Share2, Server, Copy, Terminal, CloudLightning, ArrowDownToLine, Wifi, WifiOff } from 'lucide-react';
+import { Database, RefreshCw, Zap, CheckCircle, XCircle, ShieldCheck, Mail, Clock, Globe, Download, Cloud, Radio, UserPlus, Phone, Calendar, AlertCircle, Key, RefreshCcw, Send, Trash2, Edit, ChevronRight, UserCheck, Loader2, Link as LinkIcon, FileSpreadsheet, Share2, Server, Copy, Terminal, CloudLightning, ArrowDownToLine, Wifi, WifiOff, Hourglass } from 'lucide-react';
 import { mailService } from '../services/mailService';
 import { integrationService } from '../services/integrationService';
 import { databaseService } from '../services/databaseService';
@@ -483,7 +483,26 @@ const DevPortal: React.FC<DevPortalProps> = ({
                           </td>
                           <td className="px-8 py-6"><span className="text-xs font-bold text-gray-700">{u.whatsapp || '-'}</span></td>
                           <td className="px-8 py-6"><span className="px-3 py-1 text-[9px] font-black uppercase rounded-lg border bg-blue-50 text-blue-500 border-blue-100">{u.role}</span></td>
-                          <td className="px-8 py-6"><span className="text-[10px] font-black uppercase text-gray-400">{u.subscriptionExpiry}</span></td>
+                          
+                          {/* SUBSCRIPTION PERIOD DISPLAY - UPDATED */}
+                          <td className="px-8 py-6">
+                              <div className="flex flex-col">
+                                <span className={`text-[10px] font-black uppercase ${u.subscriptionExpiry ? 'text-gray-700' : 'text-gray-300'}`}>
+                                    {u.subscriptionExpiry ? new Date(u.subscriptionExpiry).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Lifetime Access'}
+                                </span>
+                                {u.subscriptionExpiry && (
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                        <Hourglass size={10} className="text-gray-400"/>
+                                        <span className="text-[8px] font-bold text-gray-400">
+                                            {Math.ceil((new Date(u.subscriptionExpiry).getTime() - new Date().getTime()) / (1000 * 3600 * 24)) > 0 
+                                                ? `Sisa ${Math.ceil((new Date(u.subscriptionExpiry).getTime() - new Date().getTime()) / (1000 * 3600 * 24))} hari`
+                                                : 'Expired'}
+                                        </span>
+                                    </div>
+                                )}
+                              </div>
+                          </td>
+                          
                           <td className="px-8 py-6"><span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Active</span></td>
                           <td className="px-8 py-6 flex justify-center"><button onClick={() => syncToDatabase(u)} className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg"><RefreshCw size={14}/></button></td>
                        </tr>
