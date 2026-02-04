@@ -34,6 +34,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSendingComment, setIsSendingComment] = useState(false); // New state to prevent double submission
   
   // File Preview State
   const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
@@ -368,32 +369,21 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
         
         // NOTIFICATIONS LOGIC
         if (!isCurrentlyApproved) {
-            // 1. Notify Creator (if not self)
-            if (detailedViewItem.creatorId && detailedViewItem.creatorId !== currentUser.id) {
-                await databaseService.createNotification(dbConfig, {
-                    recipientId: detailedViewItem.creatorId,
-                    senderName: currentUser.name,
-                    messageText: `Konten "${updatedItem.title}" telah disetujui!`,
-                    targetContentId: updatedItem.id,
-                    type: 'success'
-                });
-            }
-
-            // 2. Notify PIC (if PIC exists and is not self)
-            if (detailedViewItem.pic) {
-                const picUser = users.find(u => u.name === detailedViewItem.pic);
-                if (picUser && picUser.id !== currentUser.id && picUser.id !== detailedViewItem.creatorId) {
+            // BROADCAST NOTIFICATION TO ALL WORKSPACE MEMBERS (Except Self)
+            // This ensures everyone sees the approval notification in their popup
+            for (const user of users) {
+                if (user.id !== currentUser.id) {
                     await databaseService.createNotification(dbConfig, {
-                        recipientId: picUser.id,
+                        recipientId: user.id,
                         senderName: currentUser.name,
-                        messageText: `Konten "${updatedItem.title}" dimana Anda sebagai PIC telah disetujui!`,
+                        messageText: `${currentUser.name} approved this content: "${updatedItem.title}"`,
                         targetContentId: updatedItem.id,
                         type: 'success'
                     });
                 }
             }
             
-            // Local Notification
+            // Local Notification for Self
             addNotification({
                 senderName: currentUser.name,
                 messageText: `Approved content: "${updatedItem.title}"`,
@@ -439,7 +429,9 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   };
 
   const handlePostComment = async (itemId: string) => {
-      if (!commentText.trim() && !attachment) return;
+      if ((!commentText.trim() && !attachment) || isSendingComment) return;
+      
+      setIsSendingComment(true); // Lock Submission
       const dbConfig = getDbConfig();
       
       const newComment: Comment = {
@@ -453,7 +445,10 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       };
       
       const targetItem = items.find(i => i.id === itemId);
-      if(!targetItem) return;
+      if(!targetItem) {
+          setIsSendingComment(false);
+          return;
+      }
 
       const updatedItem = { ...targetItem, comments: [...(targetItem.comments || []), newComment] };
 
@@ -465,40 +460,29 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           // 2. Sync to DB
           await databaseService.upsertContentPlan(dbConfig, updatedItem);
 
-          // 3. BROADCAST NOTIFICATION TO INVOLVED USERS
-          const involvedUserIds = new Set<string>();
-          
-          // ALWAYS add Creator (unless self)
-          if (targetItem.creatorId && targetItem.creatorId !== currentUser.id) {
-              involvedUserIds.add(targetItem.creatorId);
-          }
-          
-          // Add other commenters (excluding self and creator to avoid doubles)
-          targetItem.comments?.forEach(c => {
-              if (c.userId !== currentUser.id && c.userId !== targetItem.creatorId) {
-                  involvedUserIds.add(c.userId);
+          // 3. BROADCAST NOTIFICATION TO ALL WORKSPACE MEMBERS (Except Self)
+          // This ensures everyone gets the popup notification even if not on this page
+          for (const user of users) {
+              if (user.id !== currentUser.id) {
+                  await databaseService.createNotification(dbConfig, {
+                      recipientId: user.id,
+                      senderName: currentUser.name,
+                      messageText: `New comment on "${targetItem.title}": ${commentText.substring(0, 30)}...`,
+                      targetContentId: targetItem.id,
+                      type: 'info'
+                  });
               }
-          });
-
-          // Send
-          for (const recipientId of involvedUserIds) {
-              await databaseService.createNotification(dbConfig, {
-                  recipientId: recipientId,
-                  senderName: currentUser.name,
-                  messageText: `Komentar baru di "${targetItem.title}": ${commentText.substring(0, 30)}...`,
-                  targetContentId: targetItem.id,
-                  type: 'info'
-              });
           }
 
       } catch (e) { 
           console.error(e);
           alert("Gagal mengirim komentar. Periksa koneksi.");
+      } finally {
+          setIsSendingComment(false); // Unlock Submission
+          setCommentText('');
+          setAttachment(null);
+          setShowEmojiPicker(false);
       }
-      
-      setCommentText('');
-      setAttachment(null);
-      setShowEmojiPicker(false);
   };
 
   const handleUpdateLink = async (itemId: string) => {

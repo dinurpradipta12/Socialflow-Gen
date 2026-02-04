@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ThemeColor, Workspace, User, Message, PostInsight, RegistrationRequest, SystemNotification, SocialAccount } from './types';
 import { MOCK_WORKSPACES, MOCK_USERS, DEV_CREDENTIALS, SUPABASE_CONFIG, APP_NAME } from './constants';
 import Sidebar from './components/Sidebar';
@@ -69,6 +69,9 @@ const App: React.FC = () => {
   const [topNotification, setTopNotification] = useState<SystemNotification | null>(null);
   const [notificationHistory, setNotificationHistory] = useState<SystemNotification[]>([]);
   const [showNotifHistory, setShowNotifHistory] = useState(false);
+  
+  // Ref for Notification History to avoid stale closure in polling
+  const notificationHistoryRef = useRef<SystemNotification[]>([]);
 
   // Navigation State
   const [targetContentId, setTargetContentId] = useState<string | null>(null);
@@ -116,73 +119,99 @@ const App: React.FC = () => {
       localStorage.setItem('sf_workspaces_db', JSON.stringify(workspaces));
   }, [workspaces]);
 
-  // DATA SYNCING LOGIC (Workspace & Members)
+  // Sync Ref with State
   useEffect(() => {
-      const syncData = async () => {
-          if (user && user.workspaceId && authState === 'authenticated') {
-              const dbConfig = getDbConfig();
-              if (dbConfig.url && dbConfig.key) {
-                  try {
-                      // Fetch Workspace Details
-                      const freshWs = await databaseService.getWorkspaceById(dbConfig, user.workspaceId);
-                      if (freshWs) {
-                          // Fetch Members of this Workspace
-                          const allDbUsers = await databaseService.getAllUsers(dbConfig);
-                          const members = allDbUsers.filter(u => u.workspaceId === user.workspaceId);
-                          freshWs.members = members;
-                          
-                          setWorkspaces(prev => {
-                              const exists = prev.find(w => w.id === freshWs.id);
-                              return exists ? prev.map(w => w.id === freshWs.id ? freshWs : w) : [...prev, freshWs];
-                          });
-                          
-                          setAllUsers(prev => allDbUsers);
-                      }
-                  } catch (e) {
-                      console.error("Sync Error", e);
-                  }
-              }
-          }
-      };
-      
-      syncData();
-  }, [user, authState]);
+      notificationHistoryRef.current = notificationHistory;
+  }, [notificationHistory]);
 
-  // NOTIFICATION POLLING (Enhanced for Realtime Background Updates)
+  // --- GLOBAL BACKGROUND SYNC (The "Real-time" Engine) ---
   useEffect(() => {
       if (!user || authState !== 'authenticated') return;
 
-      const fetchNotifications = async () => {
+      const runSync = async () => {
           const dbConfig = getDbConfig();
-          if (dbConfig.url && dbConfig.key) {
+          if (!dbConfig.url || !dbConfig.key) return;
+
+          try {
+              // 1. Refresh CURRENT USER (To check if workspaceId is updated from outside)
+              const freshUser = await databaseService.getUserById(dbConfig, user.id);
+              if (freshUser) {
+                  // Only update if critical info changed to avoid re-renders loop
+                  if (freshUser.workspaceId !== user.workspaceId || freshUser.role !== user.role || freshUser.performanceScore !== user.performanceScore) {
+                      setUser(freshUser);
+                      localStorage.setItem('sf_session_user', JSON.stringify(freshUser));
+                  }
+              }
+
+              // 2. Refresh WORKSPACE (If user has one)
+              const activeWsId = freshUser?.workspaceId || user.workspaceId;
+              if (activeWsId) {
+                  const freshWs = await databaseService.getWorkspaceById(dbConfig, activeWsId);
+                  if (freshWs) {
+                      // Fetch fresh members
+                      const allDbUsers = await databaseService.getAllUsers(dbConfig);
+                      const members = allDbUsers.filter(u => u.workspaceId === activeWsId);
+                      freshWs.members = members;
+                      
+                      setWorkspaces(prev => {
+                          // Simple replace or add
+                          const exists = prev.find(w => w.id === freshWs.id);
+                          return exists ? prev.map(w => w.id === freshWs.id ? freshWs : w) : [...prev, freshWs];
+                      });
+                      
+                      // Also keep global users list fresh for admin/team view
+                      setAllUsers(prev => {
+                          // Map freshness
+                          const newMap = new Map(prev.map(u => [u.id, u]));
+                          members.forEach(m => newMap.set(m.id, m));
+                          return Array.from(newMap.values());
+                      });
+                  }
+              }
+
+              // 3. Refresh NOTIFICATIONS
               const notifs = await databaseService.getNotifications(dbConfig, user.id);
               
-              // Detect new unread notifications to show popups
-              const newUnread = notifs.filter(n => !n.read);
-              const previousUnreadIds = new Set(notificationHistory.filter(n => !n.read).map(n => n.id));
+              // Use Ref to access the latest history without closure staleness
+              const currentHistory = notificationHistoryRef.current;
               
-              // Find the newest notification that wasn't there before
-              const brandNew = newUnread.find(n => !previousUnreadIds.has(n.id));
+              // Identify UNREAD notifications in the fetched list
+              const incomingUnread = notifs.filter(n => !n.read);
+              
+              // Identify IDs of notifications we already knew about (either read or unread in local state)
+              // NOTE: We track all known IDs so we don't popup the same thing twice even if it remains unread in DB
+              const knownIds = new Set(currentHistory.map(n => n.id));
+              
+              // Find brand new items that are not in our local history at all
+              // AND are unread.
+              const brandNew = incomingUnread.find(n => !knownIds.has(n.id));
               
               if (brandNew) {
                   setTopNotification(brandNew);
-                  // Play subtle sound (optional, browser policy might block)
                   try {
                       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
                       audio.volume = 0.5;
                       audio.play().catch(() => {});
                   } catch(e) {}
               }
-
+              
+              // Update state only if count changed or to sync read status
+              // For simplicity in this demo, just update. In prod, deep compare.
               setNotificationHistory(notifs);
+
+          } catch (e) {
+              // Silent fail on sync error to not disturb UI
+              console.warn("Background Sync Glitch", e);
           }
       };
 
-      fetchNotifications();
-      // Polling set to 3 seconds for "Realtime" feel as requested
-      const interval = setInterval(fetchNotifications, 3000); 
+      // Initial Call
+      runSync();
+
+      // Interval Loop (3 Seconds)
+      const interval = setInterval(runSync, 3000);
       return () => clearInterval(interval);
-  }, [user, authState, notificationHistory.length]); // Dependency on length helps trigger but main loop handles it
+  }, [user?.id, user?.workspaceId, authState]); // Dependent on ID and WS ID specifically
 
   // Helper: Get Active Workspace based on current user
   const activeWorkspace = workspaces.find(w => w.id === user?.workspaceId);
@@ -395,15 +424,16 @@ const App: React.FC = () => {
   };
 
   const triggerNotification = (notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) => {
-    // This is now mostly used for local feedback, but the polling will handle real DB notifications
+    // This function can be used for immediate optimistic update, 
+    // but the background poll will eventually sync it too.
     const newNotif: SystemNotification = {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
       read: false,
       ...notif
     };
-    setTopNotification(newNotif);
-    setNotificationHistory(prev => [newNotif, ...prev]);
+    // setTopNotification(newNotif); // Redundant if poll picks it up, but okay for instant feedback
+    // setNotificationHistory(prev => [newNotif, ...prev]);
   };
 
   const handleOpenContent = (contentId?: string) => {
@@ -490,6 +520,7 @@ const App: React.FC = () => {
   }
 
   // 2. WORKSPACE SETUP
+  // [FIX] Checks if user HAS workspaceId. If so, skips this render block automatically.
   if (authState === 'authenticated' && user && !user.workspaceId && !isDev) {
       return (
         <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 font-sans">

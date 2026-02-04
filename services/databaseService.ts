@@ -129,6 +129,55 @@ export const databaseService = {
   },
 
   /**
+   * Mengambil data user berdasarkan ID (Untuk Session Refresh)
+   */
+  getUserById: async (config: { url: string; key: string }, userId: string): Promise<User | null> => {
+    if (!config.url || !config.key || !userId) return null;
+
+    const baseUrl = config.url.replace(/\/$/, "");
+    const endpoint = `${baseUrl}/rest/v1/users?user_id=eq.${encodeURIComponent(userId)}&select=*&limit=1`;
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        headers: {
+          'apikey': config.key,
+          'Authorization': `Bearer ${config.key}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) return null;
+      
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const dbUser = data[0];
+        return {
+            id: dbUser.user_id,
+            name: dbUser.full_name,
+            email: dbUser.email,
+            password: dbUser.password || 'Social123',
+            role: dbUser.role as any,
+            whatsapp: dbUser.whatsapp,
+            status: dbUser.status,
+            subscriptionExpiry: dbUser.subscription_expiry,
+            performanceScore: dbUser.performance_score,
+            workspaceId: dbUser.workspace_id,
+            permissions: { dashboard: true, calendar: true, ads: false, analytics: false, tracker: false, team: false, settings: false, contentPlan: true },
+            isSubscribed: true,
+            jobdesk: 'Member',
+            kpi: [],
+            activityLogs: [],
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${dbUser.full_name}`
+        };
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  /**
    * Mengambil data user berdasarkan email untuk Login Check
    */
   getUserByEmail: async (config: { url: string; key: string }, email: string): Promise<User | null> => {
