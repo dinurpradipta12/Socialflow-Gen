@@ -18,9 +18,6 @@ interface ContentPlanProps {
   workspaceId: string; 
 }
 
-const DEFAULT_STATUS_OPTIONS = ['Menunggu Review', 'Sedang di Review', 'Approved', 'Drafting', 'Dijadwalkan', 'Diposting', 'Revisi', 'Reschedule', 'Dibatalkan'];
-const EMOJIS = ['👍', '🔥', '❤️', '😂', '😮', '😢', '👏', '🎉', '✅', '❌', '🚀', '💯', '🤔', '👀', '✨', '🙌', '🙏', '💪', '🤝', '💡', '⚠️', '🚩', '🆗', '🆒'];
-
 const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight, users, currentUser, accounts, setAccounts, targetContentId, workspaceId }) => {
   const [items, setItems] = useState<ContentPlanItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,8 +33,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
   
   const [filterPlatform, setFilterPlatform] = useState<'All' | 'Instagram' | 'TikTok'>('All');
-  const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate] = useState('');
   const [activeAccount, setActiveAccount] = useState<string>(accounts[0]?.id || 'account-1');
 
   const [picOptions, setPicOptions] = useState<string[]>(() => JSON.parse(localStorage.getItem('sf_pic_options') || JSON.stringify(users.map(u => u.name))));
@@ -48,7 +43,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [isEditingLink, setIsEditingLink] = useState(false);
   const [tempLink, setTempLink] = useState('');
 
-  // Comment features state
   const [replyingTo, setReplyingTo] = useState<{ id: string, name: string, text: string } | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [activeCommentMenuId, setActiveCommentMenuId] = useState<string | null>(null);
@@ -99,10 +93,8 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       let updatedComments = [...(targetItem.comments || [])];
 
       if (editingCommentId) {
-          // Edit existing
           updatedComments = updatedComments.map(c => c.id === editingCommentId ? { ...c, text: commentText, timestamp: new Date().toISOString() } : c);
       } else {
-          // Post new or reply
           const newComment: Comment = { 
             id: Date.now().toString(), 
             userId: currentUser.id, 
@@ -123,14 +115,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           setItems(items.map(i => i.id === itemId ? updatedItem : i));
           if(detailedViewItem?.id === itemId) setDetailedViewItem(updatedItem);
           await databaseService.upsertContentPlan(dbConfig, updatedItem);
-          
-          if (!editingCommentId) {
-            for (const user of users) {
-                if (user.id !== currentUser.id) {
-                    await databaseService.createNotification(dbConfig, { recipientId: user.id, senderName: currentUser.name, messageText: `Komentar baru di "${targetItem.title}": ${commentText.substring(0, 30)}...`, targetContentId: targetItem.id, type: 'info' });
-                }
-            }
-          }
       } catch (e) { alert("Gagal memperbarui diskusi."); }
       finally { 
         setIsSendingComment(false); 
@@ -163,59 +147,44 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
         await databaseService.upsertContentPlan(dbConfig, updatedItem);
         setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
         setDetailedViewItem(updatedItem);
-        if (!isApproved) {
-            for (const user of users) {
-                if (user.id !== currentUser.id) {
-                    await databaseService.createNotification(dbConfig, { recipientId: user.id, senderName: currentUser.name, messageText: `${currentUser.name} menyetujui konten: "${updatedItem.title}"`, targetContentId: updatedItem.id, type: 'success' });
-                }
-            }
-        }
       } catch (e) { alert("Gagal update approval."); }
   };
 
   const filteredItems = items.filter(item => {
     if (item.accountId && item.accountId !== activeAccount) return false;
     if (filterPlatform !== 'All' && filterPlatform !== item.platform) return false;
-    if (filterStartDate && new Date(item.postDate || '') < new Date(filterStartDate)) return false;
-    if (filterEndDate && new Date(item.postDate || '') > new Date(filterEndDate)) return false;
     return true;
   });
 
   return (
-    <div className="space-y-8 animate-slide relative pb-20">
-      {previewAttachment && (
-          <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-              <button onClick={() => setPreviewAttachment(null)} className="fixed top-6 right-6 p-3 text-white z-[260]"><X size={24}/></button>
-              <img src={previewAttachment} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
-          </div>
-      )}
-
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+    <div className="space-y-6 md:space-y-8 animate-slide relative pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Konten Plan</h1>
-          <p className="text-gray-400 font-medium flex items-center gap-2">Arunika Creative Studio <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1"><RefreshCw size={10}/> Syncing Live</span></p>
+          <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">Konten Plan</h1>
+          <p className="text-xs md:text-sm text-gray-400 font-medium flex items-center gap-2">Arunika Creative Studio <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1"><RefreshCw size={10}/> Syncing</span></p>
         </div>
-        <div className="flex items-center gap-3 bg-white p-1.5 rounded-full shadow-sm border border-gray-100">
-            <div className="px-4 border-r border-gray-100"><Filter size={14} className="text-gray-400" /></div>
-            {['All', 'Instagram', 'TikTok'].map((p) => (
-                <button key={p} onClick={() => setFilterPlatform(p as any)} className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase transition-all ${filterPlatform === p ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>{p}</button>
-            ))}
+        <div className="w-full md:w-auto flex flex-col md:flex-row items-stretch md:items-center gap-3">
+            <div className="flex items-center gap-2 bg-white p-1 rounded-full shadow-sm border border-gray-100 overflow-x-auto no-scrollbar">
+                {['All', 'Instagram', 'TikTok'].map((p) => (
+                    <button key={p} onClick={() => setFilterPlatform(p as any)} className={`px-4 py-2 rounded-full text-[9px] font-black uppercase transition-all whitespace-nowrap ${filterPlatform === p ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>{p}</button>
+                ))}
+            </div>
+            <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="px-5 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-100 active:scale-95 flex items-center justify-center gap-2 transition-all"><Plus size={18} /> Tambah Plan</button>
         </div>
-        <button onClick={() => { setEditingItem(null); setIsModalOpen(true); }} className="px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold shadow-lg shadow-blue-200 active:scale-95 flex items-center gap-2 transition-all hover:bg-blue-700"><Plus size={20} /> Tambah Plan</button>
       </div>
 
-      <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex items-center gap-3 overflow-x-auto pb-2 no-scrollbar">
          {accounts.map(acc => (
-             <button key={acc.id} onClick={() => setActiveAccount(acc.id)} className={`px-6 py-3 rounded-2xl text-xs font-black uppercase transition-all border flex items-center gap-2 ${activeAccount === acc.id ? 'bg-white border-blue-200 text-blue-600 shadow-lg ring-2 ring-blue-50' : 'bg-white border-gray-100 text-gray-400'}`}>{acc.name}</button>
+             <button key={acc.id} onClick={() => setActiveAccount(acc.id)} className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all border whitespace-nowrap flex items-center gap-2 ${activeAccount === acc.id ? 'bg-white border-blue-200 text-blue-600 shadow-md ring-2 ring-blue-50' : 'bg-white border-gray-100 text-gray-400'}`}>{acc.name}</button>
          ))}
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[140] flex items-center justify-center p-6">
-           <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-           <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-slide flex flex-col max-h-[90vh]">
-              <div className="p-8 bg-white border-b flex flex-col items-center">
-                 <h2 className="text-2xl font-black text-gray-900">{editingItem ? 'Edit Perencanaan' : 'Perencanaan Baru'}</h2>
+        <div className="fixed inset-0 z-[140] flex items-end md:items-center justify-center p-0 md:p-6 bg-slate-900/10 backdrop-blur-sm">
+           <div className="absolute inset-0" onClick={() => setIsModalOpen(false)}></div>
+           <div className="relative bg-white w-full max-w-2xl rounded-t-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden animate-slide flex flex-col max-h-[90vh]">
+              <div className="p-6 md:p-8 bg-white border-b flex flex-col items-center">
+                 <h2 className="text-xl md:text-2xl font-black text-gray-900">{editingItem ? 'Edit Perencanaan' : 'Perencanaan Baru'}</h2>
               </div>
               <form onSubmit={async (e) => {
                   e.preventDefault(); setIsSaving(true);
@@ -224,136 +193,95 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                   try { await databaseService.upsertContentPlan(dbConfig, finalItem); fetchData(); setIsModalOpen(false); }
                   catch (err) { alert("Gagal simpan."); }
                   finally { setIsSaving(false); }
-              }} className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
-                 <div className="grid grid-cols-2 gap-4">
-                    <button type="button" onClick={() => setFormData({...formData, platform: 'Instagram'})} className={`p-4 rounded-2xl border flex items-center justify-center gap-2 ${formData.platform === 'Instagram' ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-gray-50'}`}><Instagram size={20} /> <span className="text-xs font-black uppercase">Instagram</span></button>
-                    <button type="button" onClick={() => setFormData({...formData, platform: 'TikTok'})} className={`p-4 rounded-2xl border flex items-center justify-center gap-2 ${formData.platform === 'TikTok' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-gray-50'}`}><Video size={20} /> <span className="text-xs font-black uppercase">TikTok</span></button>
+              }} className="p-6 md:p-8 space-y-5 md:space-y-6 overflow-y-auto custom-scrollbar flex-1">
+                 <div className="grid grid-cols-2 gap-3 md:gap-4">
+                    <button type="button" onClick={() => setFormData({...formData, platform: 'Instagram'})} className={`p-4 rounded-2xl border flex items-center justify-center gap-2 ${formData.platform === 'Instagram' ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-gray-50'}`}><Instagram size={18} /> <span className="text-[10px] font-black uppercase">Instagram</span></button>
+                    <button type="button" onClick={() => setFormData({...formData, platform: 'TikTok'})} className={`p-4 rounded-2xl border flex items-center justify-center gap-2 ${formData.platform === 'TikTok' ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-gray-50'}`}><Video size={18} /> <span className="text-[10px] font-black uppercase">TikTok</span></button>
                  </div>
-                 <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Judul Posting</label><input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900 border focus:border-blue-200 transition-all" /></div>
-                 <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tanggal</label><input type="date" value={formData.postDate} onChange={e => setFormData({...formData, postDate: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900" /></div>
-                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">PIC</label><select value={formData.pic} onChange={e => setFormData({...formData, pic: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900"><option value="">Pilih PIC</option>{picOptions.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
+                 <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-400 ml-1">Judul Posting</label><input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm text-gray-900 border focus:border-blue-200 transition-all" /></div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-400 ml-1">Tanggal</label><input type="date" value={formData.postDate} onChange={e => setFormData({...formData, postDate: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm text-gray-900" /></div>
+                    <div className="space-y-1"><label className="text-[9px] font-black uppercase text-gray-400 ml-1">PIC</label><select value={formData.pic} onChange={e => setFormData({...formData, pic: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm text-gray-900"><option value="">Pilih PIC</option>{picOptions.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
                  </div>
                  <button type="submit" disabled={isSaving} className="w-full py-5 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl hover:bg-blue-700 flex justify-center gap-2">{isSaving && <Loader2 size={16} className="animate-spin" />} Simpan Plan</button>
-                 
-                 {/* Tombol Tutup Minimalis Bawah */}
-                 <div className="flex justify-center pt-2">
-                    <button 
-                      type="button" 
-                      onClick={() => setIsModalOpen(false)} 
-                      className="px-6 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-gray-900 transition-colors border border-transparent hover:border-gray-100 rounded-full"
-                    >
-                      Batal
-                    </button>
-                 </div>
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="w-full py-3 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">Batal</button>
               </form>
            </div>
         </div>
       )}
 
       {detailedViewItem && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-md" onClick={() => setDetailedViewItem(null)}></div>
-           <div className="relative bg-white w-full max-w-5xl h-[85vh] rounded-[3rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col animate-slide">
+        <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-0 md:p-4 bg-slate-900/10 backdrop-blur-md">
+           <div className="absolute inset-0" onClick={() => setDetailedViewItem(null)}></div>
+           <div className="relative bg-white w-full max-w-5xl h-[95vh] md:h-[85vh] rounded-t-[3rem] md:rounded-[3rem] shadow-2xl border border-gray-100 overflow-hidden flex flex-col animate-slide">
               
-              <div className="flex flex-1 overflow-hidden">
-                <div className="w-1/2 p-10 overflow-y-auto bg-white space-y-8 border-r flex flex-col custom-scrollbar">
+              <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                {/* Content Details - Top on mobile, Left on Desktop */}
+                <div className="w-full md:w-1/2 p-6 md:p-10 overflow-y-auto bg-white space-y-6 md:space-y-8 border-b md:border-b-0 md:border-r flex flex-col custom-scrollbar shrink-0 md:shrink">
                   <div>
-                      <div className="flex justify-between items-center mb-2">
-                          <span className={`px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${detailedViewItem.status === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{detailedViewItem.status}</span>
+                      <div className="flex justify-between items-center mb-4">
+                          <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${detailedViewItem.status === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{detailedViewItem.status}</span>
                           <button onClick={() => { 
                               setEditingItem(detailedViewItem); 
                               setFormData({
-                                title: detailedViewItem.title,
-                                platform: detailedViewItem.platform as any,
-                                value: detailedViewItem.value,
-                                pillar: detailedViewItem.pillar,
-                                type: detailedViewItem.type,
-                                description: detailedViewItem.description,
-                                postLink: detailedViewItem.postLink,
-                                approvedBy: detailedViewItem.approvedBy || '',
-                                pic: detailedViewItem.pic || '',
-                                scriptUrl: detailedViewItem.scriptUrl || '',
-                                visualUrl: detailedViewItem.visualUrl || '',
-                                status: detailedViewItem.status as any,
-                                postDate: detailedViewItem.postDate || ''
+                                title: detailedViewItem.title, platform: detailedViewItem.platform as any, value: detailedViewItem.value, pillar: detailedViewItem.pillar, type: detailedViewItem.type, description: detailedViewItem.description, postLink: detailedViewItem.postLink, approvedBy: detailedViewItem.approvedBy || '', pic: detailedViewItem.pic || '', scriptUrl: detailedViewItem.scriptUrl || '', visualUrl: detailedViewItem.visualUrl || '', status: detailedViewItem.status as any, postDate: detailedViewItem.postDate || ''
                               });
                               setDetailedViewItem(null); 
                               setIsModalOpen(true);
-                          }} className="p-3 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-2xl transition-all shadow-sm"><Edit3 size={18}/></button>
+                          }} className="p-3 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-xl transition-all"><Edit3 size={18}/></button>
                       </div>
-                      <h2 className="text-3xl font-black text-gray-900 mt-2 leading-tight">{detailedViewItem.title}</h2>
-                      <p className="text-xs font-bold text-gray-400 mt-2 flex items-center gap-2"><Calendar size={14}/> {detailedViewItem.postDate || '-'}</p>
-                  </div>
-                  <div className="p-6 bg-gray-50 rounded-[2rem]">
-                      <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-3">Post Live Link</h4>
-                      <div className="flex items-center justify-between gap-2">
-                          {detailedViewItem.postLink ? <a href={detailedViewItem.postLink} target="_blank" className="flex-1 truncate text-xs font-bold text-blue-600 hover:underline">{detailedViewItem.postLink}</a> : <span className="text-xs text-gray-300 italic">No link</span>}
-                          <button onClick={() => { setTempLink(detailedViewItem.postLink || ''); setIsEditingLink(true); }} className="p-2 text-gray-400"><Edit2 size={14}/></button>
+                      <h2 className="text-xl md:text-3xl font-black text-gray-900 leading-tight">{detailedViewItem.title}</h2>
+                      <div className="flex items-center gap-4 mt-3">
+                        <p className="text-[10px] font-bold text-gray-400 flex items-center gap-2"><Calendar size={12}/> {detailedViewItem.postDate || '-'}</p>
+                        <p className="text-[10px] font-bold text-gray-400 flex items-center gap-2 capitalize"><Instagram size={12}/> {detailedViewItem.platform}</p>
                       </div>
                   </div>
-                  <div className="flex gap-3 pt-6 mt-auto">
-                      <button onClick={handleToggleApprove} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 transition-all ${detailedViewItem.status === 'Approved' ? 'bg-rose-50 text-rose-500' : 'bg-emerald-500 text-white'}`}>{detailedViewItem.status === 'Approved' ? <Undo2 size={16} /> : <CheckCircle size={16} />} {detailedViewItem.status === 'Approved' ? 'Batal Approve' : 'Approve'}</button>
-                      <button onClick={async () => { setAnalyzingId(detailedViewItem.id); try { const ins = await scrapePostInsights(detailedViewItem.postLink); onSaveInsight({...ins, sourceType: 'plan'}); alert("Sukses sync ke Analitik."); } catch(e) { alert("Link tidak valid."); } finally { setAnalyzingId(null); } }} disabled={analyzingId === detailedViewItem.id} className="flex-1 py-4 bg-gray-900 text-white rounded-2xl text-[10px] font-black uppercase flex items-center justify-center gap-2">{analyzingId === detailedViewItem.id ? <Loader2 size={14} className="animate-spin" /> : <BarChart2 size={14} />} Analyze Link</button>
+                  <div className="p-5 bg-gray-50 rounded-[1.5rem] md:rounded-[2rem]">
+                      <h4 className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">Live URL Link</h4>
+                      <div className="flex items-center justify-between gap-3">
+                          {detailedViewItem.postLink ? <a href={detailedViewItem.postLink} target="_blank" className="flex-1 truncate text-xs font-bold text-blue-600">{detailedViewItem.postLink}</a> : <span className="text-xs text-gray-300 italic">No link provided</span>}
+                          <button onClick={() => { setTempLink(detailedViewItem.postLink || ''); setIsEditingLink(true); }} className="p-2 text-gray-400 hover:text-blue-500"><Edit2 size={14}/></button>
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mt-auto">
+                      <button onClick={handleToggleApprove} className={`py-4 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 transition-all ${detailedViewItem.status === 'Approved' ? 'bg-rose-50 text-rose-500' : 'bg-emerald-500 text-white'}`}>{detailedViewItem.status === 'Approved' ? <Undo2 size={14} /> : <CheckCircle size={14} />} {detailedViewItem.status === 'Approved' ? 'Cancel' : 'Approve'}</button>
+                      <button onClick={async () => { setAnalyzingId(detailedViewItem.id); try { const ins = await scrapePostInsights(detailedViewItem.postLink); onSaveInsight({...ins, sourceType: 'plan'}); alert("Synced to analytics."); } catch(e) { alert("Invalid link."); } finally { setAnalyzingId(null); } }} disabled={analyzingId === detailedViewItem.id} className="py-4 bg-gray-900 text-white rounded-2xl text-[9px] font-black uppercase flex items-center justify-center gap-2">{analyzingId === detailedViewItem.id ? <Loader2 size={14} className="animate-spin" /> : <BarChart2 size={14} />} Analyze</button>
                   </div>
                 </div>
 
-                <div className="w-1/2 p-10 flex flex-col bg-gray-50/30 relative">
-                  <div className="mb-6 flex items-center gap-3">
-                      <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><MessageSquare size={20} /></div>
-                      <h3 className="text-lg font-black text-gray-900">Diskusi Tim</h3>
+                {/* Discussion Section - Bottom on mobile, Right on Desktop */}
+                <div className="w-full md:w-1/2 p-6 md:p-10 flex flex-col bg-gray-50/20 relative min-h-0">
+                  <div className="mb-4 flex items-center gap-3">
+                      <div className="p-2.5 bg-blue-100 text-blue-600 rounded-xl"><MessageSquare size={18} /></div>
+                      <h3 className="text-base font-black text-gray-900">Diskusi Tim</h3>
                   </div>
                   
-                  <div className="flex-1 overflow-y-auto space-y-6 mb-6 pr-2 custom-scrollbar">
+                  <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-1 custom-scrollbar">
                       {detailedViewItem.comments?.map((c) => {
                           const isMe = c.userId === currentUser.id;
-                          const showMenu = activeCommentMenuId === c.id;
-
                           return (
                               <div key={c.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end animate-slide group`}>
                                   <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[85%] relative`}>
-                                      
-                                      {/* Thread reply quote display */}
                                       {c.replyToId && (
-                                        <div className={`flex items-center gap-2 px-3 py-2 bg-gray-200/50 rounded-t-xl text-[10px] mb-[-10px] opacity-60 border-l-2 border-blue-400 mx-2 ${isMe ? 'mr-4 ml-0' : 'ml-4 mr-0'}`}>
-                                          <CornerDownRight size={10} className="text-blue-500"/>
-                                          <span className="font-black text-gray-600 truncate max-w-[120px] uppercase">{c.replyToName}</span>
-                                          <span className="text-gray-400 italic truncate max-w-[150px]">"{c.replyToText}"</span>
+                                        <div className={`flex items-center gap-2 px-3 py-2 bg-gray-200/50 rounded-t-xl text-[9px] mb-[-8px] opacity-60 border-l-2 border-blue-400 mx-2 ${isMe ? 'mr-4 ml-0' : 'ml-4 mr-0'}`}>
+                                          <CornerDownRight size={8} className="text-blue-500"/>
+                                          <span className="font-black text-gray-600 truncate max-w-[80px] uppercase">{c.replyToName}</span>
                                         </div>
                                       )}
-
                                       <div className={`p-4 rounded-2xl shadow-sm relative ${isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white text-gray-700 rounded-bl-sm'}`}>
-                                          {!isMe && <p className="text-[9px] font-black uppercase text-blue-500 mb-1">{c.userName}</p>}
+                                          {!isMe && <p className="text-[8px] font-black uppercase text-blue-500 mb-1">{c.userName}</p>}
                                           <p className="text-xs font-medium leading-relaxed">{c.text}</p>
-                                          
-                                          {/* Mini Action Button */}
-                                          <button 
-                                            onClick={() => setActiveCommentMenuId(activeCommentMenuId === c.id ? null : c.id)}
-                                            className={`absolute top-2 ${isMe ? '-left-8' : '-right-8'} p-1 text-gray-300 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity`}
-                                          >
+                                          <button onClick={() => setActiveCommentMenuId(activeCommentMenuId === c.id ? null : c.id)} className={`absolute top-2 ${isMe ? '-left-8' : '-right-8'} p-1 text-gray-300 md:opacity-0 md:group-hover:opacity-100 transition-opacity`}>
                                             <MoreVertical size={14}/>
                                           </button>
-
-                                          {/* Minimalist Popup Menu */}
-                                          {showMenu && (
-                                            <div className={`absolute z-30 top-8 ${isMe ? '-left-24' : '-right-24'} bg-white shadow-xl rounded-xl border border-gray-100 p-1 flex flex-col min-w-[100px] animate-slide-down`}>
-                                              <button onClick={() => { setReplyingTo({id: c.id, name: c.userName, text: c.text}); setActiveCommentMenuId(null); }} className="flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                                                <Reply size={12}/> Balas
-                                              </button>
-                                              {isMe && (
-                                                <>
-                                                  <button onClick={() => { setEditingCommentId(c.id); setCommentText(c.text); setActiveCommentMenuId(null); }} className="flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                                                    <Edit2 size={12}/> Edit
-                                                  </button>
-                                                  <button onClick={() => { handleDeleteComment(c.id); setActiveCommentMenuId(null); }} className="flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase text-rose-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors">
-                                                    <Trash2 size={12}/> Hapus
-                                                  </button>
-                                                </>
-                                              )}
+                                          {activeCommentMenuId === c.id && (
+                                            <div className={`absolute z-30 top-8 ${isMe ? '-left-20' : '-right-20'} bg-white shadow-xl rounded-xl border border-gray-100 p-1 flex flex-col min-w-[90px] animate-slide-down`}>
+                                              <button onClick={() => { setReplyingTo({id: c.id, name: c.userName, text: c.text}); setActiveCommentMenuId(null); }} className="flex items-center gap-2 px-2 py-1.5 text-[8px] font-black uppercase text-gray-500 hover:bg-blue-50 rounded-lg">Reply</button>
+                                              {isMe && <button onClick={() => handleDeleteComment(c.id)} className="flex items-center gap-2 px-2 py-1.5 text-[8px] font-black uppercase text-rose-400 hover:bg-rose-50 rounded-lg">Delete</button>}
                                             </div>
                                           )}
                                       </div>
-                                      <p className="text-[9px] text-gray-300 mt-1 font-bold">{new Date(c.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                                      <p className="text-[8px] text-gray-300 mt-1 font-bold">{new Date(c.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                                   </div>
                               </div>
                           );
@@ -361,82 +289,79 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                       <div ref={commentsEndRef} />
                   </div>
 
-                  <div className="relative bg-white p-2 rounded-3xl border border-gray-100 shadow-lg">
-                      {/* Reply indicator bar */}
+                  <div className="relative bg-white p-1.5 rounded-2xl border border-gray-100 shadow-md">
                       {replyingTo && (
-                        <div className="flex items-center justify-between px-4 py-2 bg-blue-50 rounded-2xl mb-2 animate-slide">
-                          <div className="flex items-center gap-2 overflow-hidden">
-                            <Reply size={12} className="text-blue-500"/>
-                            <p className="text-[10px] font-bold text-blue-600 truncate">Balas {replyingTo.name}: <span className="font-medium text-blue-400 italic">"{replyingTo.text}"</span></p>
-                          </div>
-                          <button onClick={() => setReplyingTo(null)} className="p-1 text-blue-300 hover:text-blue-600"><X size={14}/></button>
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-blue-50 rounded-xl mb-1.5">
+                          <p className="text-[9px] font-bold text-blue-600 truncate">Replying: <span className="font-medium opacity-70 italic">"{replyingTo.text}"</span></p>
+                          <button onClick={() => setReplyingTo(null)} className="p-1 text-blue-300"><X size={12}/></button>
                         </div>
                       )}
-                      
-                      {/* Edit indicator bar */}
-                      {editingCommentId && (
-                        <div className="flex items-center justify-between px-4 py-2 bg-amber-50 rounded-2xl mb-2 animate-slide">
-                          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2"><Edit2 size={12}/> Mengedit komentar...</p>
-                          <button onClick={() => { setEditingCommentId(null); setCommentText(''); }} className="p-1 text-amber-300 hover:text-amber-600"><X size={14}/></button>
-                        </div>
-                      )}
-
                       <div className="flex gap-2 items-center">
-                          <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-3 text-gray-400 hover:text-blue-500 transition-colors"><Smile size={20}/></button>
-                          <input 
-                            value={commentText} 
-                            onChange={(e) => setCommentText(e.target.value)} 
-                            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePostComment(detailedViewItem.id)} 
-                            placeholder={replyingTo ? "Balas pesan..." : "Tulis komentar..."} 
-                            className="flex-1 bg-transparent outline-none text-xs font-medium text-gray-900" 
-                          />
-                          <button onClick={() => handlePostComment(detailedViewItem.id)} disabled={isSendingComment} className="p-3 bg-blue-600 text-white rounded-2xl shadow-md active:scale-95 transition-transform">
-                            {isSendingComment ? <Loader2 size={16} className="animate-spin"/> : editingCommentId ? <Check size={16}/> : <Send size={16}/>}
+                          <input value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePostComment(detailedViewItem.id)} placeholder="Tulis komentar..." className="flex-1 px-3 bg-transparent outline-none text-xs font-medium text-gray-900 py-2" />
+                          <button onClick={() => handlePostComment(detailedViewItem.id)} disabled={isSendingComment} className="p-2.5 bg-blue-600 text-white rounded-xl shadow-md">
+                            {isSendingComment ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
                           </button>
                       </div>
                   </div>
                 </div>
               </div>
 
-              {/* Minimalist Bottom Close Button */}
               <div className="p-4 border-t bg-white flex justify-center items-center shrink-0">
-                  <button 
-                    onClick={() => setDetailedViewItem(null)} 
-                    className="px-10 py-2.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-all border border-transparent hover:border-gray-100"
-                  >
-                    Tutup Detail
-                  </button>
+                  <button onClick={() => setDetailedViewItem(null)} className="px-10 py-2 rounded-full text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-gray-900 transition-all">Tutup Detail</button>
               </div>
            </div>
         </div>
       )}
 
-      <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm overflow-x-auto">
-         <table className="w-full text-left min-w-[800px]">
+      {/* Desktop Table - Hidden on Mobile */}
+      <div className="hidden md:block bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
+         <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
                <tr>
-                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest">Tanggal</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest">Status</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest">Judul</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Approval</th>
-                  <th className="px-8 py-5 text-[10px] font-black text-gray-300 uppercase tracking-widest text-center">Action</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-gray-300 uppercase tracking-widest">Tanggal</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-gray-300 uppercase tracking-widest">Status</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-gray-300 uppercase tracking-widest">Judul</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-gray-300 uppercase tracking-widest text-center">Approve</th>
+                  <th className="px-8 py-5 text-[9px] font-black text-gray-300 uppercase tracking-widest text-center">Action</th>
                </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
                {filteredItems.map(item => (
                   <tr key={item.id} className="hover:bg-gray-50 transition-all cursor-pointer group" onClick={() => setDetailedViewItem(item)}>
                     <td className="px-8 py-6 text-xs font-bold text-gray-500">{item.postDate || '-'}</td>
-                    <td className="px-8 py-6"><span className="px-3 py-1.5 text-[10px] font-black rounded-lg uppercase tracking-widest border bg-white border-gray-200 text-gray-600">{item.status}</span></td>
+                    <td className="px-8 py-6"><span className="px-3 py-1 text-[9px] font-black rounded-lg uppercase border bg-white border-gray-100 text-gray-600">{item.status}</span></td>
                     <td className="px-8 py-6">
-                        <div className="flex items-center gap-2 mb-1">{item.platform === 'Instagram' ? <Instagram size={12} className="text-rose-500"/> : <Video size={12} className="text-slate-800"/>}<span className="text-[9px] font-black uppercase text-gray-300">{item.platform}</span></div>
-                        <p className="text-sm font-bold text-gray-900">{item.title}</p>
+                        <div className="flex items-center gap-2 mb-1">{item.platform === 'Instagram' ? <Instagram size={12} className="text-rose-500"/> : <Video size={12} className="text-slate-800"/>}<span className="text-[8px] font-black uppercase text-gray-300">{item.platform}</span></div>
+                        <p className="text-sm font-bold text-gray-900 truncate max-w-xs">{item.title}</p>
                     </td>
-                    <td className="px-8 py-6 text-center">{item.approvedBy ? <div className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full"><Check size={16} /></div> : <span className="text-gray-300">-</span>}</td>
-                    <td className="px-8 py-6 text-center"><button className="p-2 text-gray-400 group-hover:text-blue-600"><MoreHorizontal size={20}/></button></td>
+                    <td className="px-8 py-6 text-center">{item.approvedBy ? <div className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full"><Check size={14} /></div> : <span className="text-gray-200">-</span>}</td>
+                    <td className="px-8 py-6 text-center"><button className="p-2 text-gray-300 group-hover:text-blue-500"><MoreHorizontal size={20}/></button></td>
                   </tr>
                ))}
+               {filteredItems.length === 0 && <tr><td colSpan={5} className="py-20 text-center text-gray-300 font-bold uppercase text-xs">Belum ada data perencanaan.</td></tr>}
             </tbody>
          </table>
+      </div>
+
+      {/* Mobile Card List - Visible only on Mobile */}
+      <div className="md:hidden space-y-4">
+          {filteredItems.map(item => (
+              <div key={item.id} onClick={() => setDetailedViewItem(item)} className="bg-white p-5 rounded-[2rem] border border-gray-100 shadow-sm active:scale-95 transition-transform flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        {item.platform === 'Instagram' ? <Instagram size={14} className="text-rose-500"/> : <Video size={14} className="text-slate-800"/>}
+                        <span className="text-[9px] font-black uppercase text-gray-400 tracking-widest">{item.platform}</span>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest border border-gray-50 ${item.status === 'Approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-500'}`}>{item.status}</span>
+                  </div>
+                  <h3 className="font-black text-gray-900 text-sm leading-snug">{item.title}</h3>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+                      <p className="text-[10px] font-bold text-gray-400 flex items-center gap-2"><Clock size={12}/> {item.postDate || 'No Date'}</p>
+                      {item.approvedBy && <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 rounded-md text-emerald-600 text-[8px] font-black uppercase"><Check size={10}/> Approved</div>}
+                  </div>
+              </div>
+          ))}
+          {filteredItems.length === 0 && <div className="p-10 text-center text-gray-300 text-xs font-black uppercase border border-dashed rounded-[2rem]">Kosong</div>}
       </div>
     </div>
   );

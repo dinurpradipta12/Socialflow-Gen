@@ -17,12 +17,12 @@ import ChatPopup from './components/ChatPopup';
 import TopNotification from './components/TopNotification';
 import { cloudService } from './services/cloudService';
 import { databaseService } from './services/databaseService';
-import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle, UserPlus, ChevronLeft, Building2, Link, LogIn, Hash } from 'lucide-react';
+import { Loader2, Database, Cloud, Globe, Menu, ShieldCheck, Wifi, WifiOff, ArrowRight, Lock, AlertCircle, Phone, Eye, EyeOff, AlertTriangle, Save, CheckCircle, UserPlus, ChevronLeft, Building2, Link, LogIn, Hash, X } from 'lucide-react';
 
 const cloudSyncChannel = new BroadcastChannel('sf_cloud_sync');
 
 const App: React.FC = () => {
-  // --- GLOBAL SHARED STATE (For real-time sync across pages) ---
+  // --- GLOBAL SHARED STATE ---
   const [allUsers, setAllUsers] = useState<User[]>(() => {
     const saved = localStorage.getItem('sf_users_db');
     return saved ? JSON.parse(saved) : MOCK_USERS;
@@ -39,7 +39,6 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Session State
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('sf_session_user');
     return saved ? JSON.parse(saved) : null;
@@ -49,11 +48,7 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
-  
-  // Navigation & Linking
   const [targetContentId, setTargetContentId] = useState<string | null>(null);
-
-  // Forms & Modals
   const [loginError, setLoginError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isJoinWorkspaceModalOpen, setIsJoinWorkspaceModalOpen] = useState(false);
@@ -63,18 +58,15 @@ const App: React.FC = () => {
   const [setupStep, setSetupStep] = useState<'choice' | 'create' | 'join'>('choice');
   const [newWorkspaceData, setNewWorkspaceData] = useState({ name: '', color: 'blue' as ThemeColor });
 
-  // Notifications State
   const [topNotification, setTopNotification] = useState<SystemNotification | null>(null);
   const [notificationHistory, setNotificationHistory] = useState<SystemNotification[]>([]);
   const notificationHistoryRef = useRef<SystemNotification[]>([]);
 
-  // Accounts & Personalization
   const [accounts, setAccounts] = useState<SocialAccount[]>([
     { id: 'account-1', name: 'Akun Utama', instagramUsername: '@arunika', tiktokUsername: '@arunika.id' }
   ]);
   const [primaryColorHex, setPrimaryColorHex] = useState('#BFDBFE');
   const [customLogo, setCustomLogo] = useState<string | null>(localStorage.getItem('sf_custom_logo'));
-
   const [registrations, setRegistrations] = useState<RegistrationRequest[]>([]);
 
   const getDbConfig = () => ({
@@ -82,7 +74,6 @@ const App: React.FC = () => {
     key: localStorage.getItem('sf_db_key') || SUPABASE_CONFIG.key
   });
 
-  // --- PERSISTENCE ---
   useEffect(() => {
     if (customLogo) localStorage.setItem('sf_custom_logo', customLogo);
     else localStorage.removeItem('sf_custom_logo');
@@ -98,7 +89,6 @@ const App: React.FC = () => {
       notificationHistoryRef.current = notificationHistory;
   }, [notificationHistory]);
 
-  // --- GLOBAL BACKGROUND SYNC ENGINE (Real-time Feel) ---
   useEffect(() => {
       if (!user || authState !== 'authenticated') return;
 
@@ -107,7 +97,6 @@ const App: React.FC = () => {
           if (!dbConfig.url || !dbConfig.key) return;
 
           try {
-              // 1. Refresh CURRENT SESSION (Handle outside invites/role changes)
               const freshUser = await databaseService.getUserById(dbConfig, user.id);
               if (freshUser) {
                   if (freshUser.workspaceId !== user.workspaceId || freshUser.role !== user.role) {
@@ -116,7 +105,6 @@ const App: React.FC = () => {
                   }
               }
 
-              // 2. Refresh WORKSPACE & MEMBERS (Team Page Sync)
               const activeWsId = freshUser?.workspaceId || user.workspaceId;
               if (activeWsId) {
                   const [freshWs, allDbUsers] = await Promise.all([
@@ -134,18 +122,14 @@ const App: React.FC = () => {
                       setAllUsers(allDbUsers);
                   }
 
-                  // 3. Refresh CONTENT PLANS (Content Plan & Calendar Sync)
                   const freshPlans = await databaseService.getContentPlans(dbConfig, activeWsId);
-                  // Only update state if data changed to prevent flickering in detail modals
                   setContentPlans(prev => JSON.stringify(prev) !== JSON.stringify(freshPlans) ? freshPlans : prev);
               }
 
-              // 4. Refresh NOTIFICATIONS (Popup Sync)
               const notifs = await databaseService.getNotifications(dbConfig, user.id);
               const currentHistory = notificationHistoryRef.current;
               const knownIds = new Set(currentHistory.map(n => n.id));
               
-              // Find brand new unread items
               const incomingUnread = notifs.filter(n => !n.read);
               const brandNew = incomingUnread.find(n => !knownIds.has(n.id));
               
@@ -163,11 +147,10 @@ const App: React.FC = () => {
       };
 
       runSync();
-      const interval = setInterval(runSync, 3000); // Pulse every 3s
+      const interval = setInterval(runSync, 3000); 
       return () => clearInterval(interval);
   }, [user?.id, user?.workspaceId, authState]);
 
-  // --- HELPERS ---
   const activeWorkspace = workspaces.find(w => w.id === user?.workspaceId);
 
   const switchProfile = (targetUser: User) => {
@@ -180,12 +163,11 @@ const App: React.FC = () => {
     if (contentId) {
         setTargetContentId(contentId);
         setActiveTab('contentPlan');
-        setIsSidebarOpen(false); // Auto-close on link navigation
+        setIsSidebarOpen(false); 
         setTopNotification(null);
     }
   };
 
-  // --- HANDLERS ---
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -257,11 +239,10 @@ const App: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // --- RENDER LOGIC ---
   if (authState === 'register') {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans text-gray-900">
-        <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-8 border border-gray-100 animate-slide">
+        <div className="max-w-[480px] w-full bg-white rounded-[2rem] md:rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-8 md:p-14 space-y-8 border border-gray-100 animate-slide">
           <button onClick={() => setAuthState('login')} className="flex items-center gap-2 text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest transition-colors"><ChevronLeft size={16} /> Back to Login</button>
           {regSuccess ? (
             <div className="text-center space-y-6">
@@ -285,14 +266,13 @@ const App: React.FC = () => {
     );
   }
 
-  // Auto-skip setup if user already has a workspace
   if (authState === 'authenticated' && user && !user.workspaceId && user.role !== 'developer') {
       return (
-        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 font-sans text-gray-900">
-            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 animate-slide">
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 md:p-6 font-sans text-gray-900">
+            <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 animate-slide">
                 <div className="md:col-span-2 text-center mb-4"><h1 className="text-3xl font-black text-gray-900 tracking-tight">Setup Workspace</h1><p className="text-gray-400 mt-2">Pilih cara memulai tim Anda.</p></div>
-                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-xl flex flex-col items-center text-center space-y-6 hover:border-blue-200 transition-all">
-                    <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center"><Hash size={32}/></div>
+                <div className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] border border-gray-100 shadow-xl flex flex-col items-center text-center space-y-6 hover:border-blue-200 transition-all">
+                    <div className="w-16 h-16 md:w-20 md:h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center"><Hash size={32}/></div>
                     <h2 className="text-xl font-black text-gray-900">Gabung Tim</h2>
                     {setupStep === 'join' ? (
                         <form onSubmit={handleJoinByCode} className="w-full space-y-4">
@@ -301,8 +281,8 @@ const App: React.FC = () => {
                         </form>
                     ) : <button onClick={() => setSetupStep('join')} className="px-8 py-3 bg-white border-2 text-gray-900 rounded-2xl font-black uppercase text-[10px]">Input Kode</button>}
                 </div>
-                <div className="bg-gray-900 p-10 rounded-[3rem] shadow-2xl flex flex-col items-center text-center space-y-6 text-white">
-                    <div className="w-20 h-20 bg-white/10 text-white rounded-full flex items-center justify-center"><Building2 size={32}/></div>
+                <div className="bg-gray-900 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] shadow-2xl flex flex-col items-center text-center space-y-6 text-white">
+                    <div className="w-16 h-16 md:w-20 md:h-20 bg-white/10 text-white rounded-full flex items-center justify-center"><Building2 size={32}/></div>
                     <h2 className="text-xl font-black">Buat Workspace</h2>
                     {setupStep === 'create' ? (
                         <form onSubmit={handleCreateWorkspace} className="w-full space-y-4">
@@ -320,7 +300,7 @@ const App: React.FC = () => {
   if (authState === 'login') {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans text-gray-900">
-        <div className="max-w-[440px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-12 border border-gray-100 animate-slide">
+        <div className="max-w-[440px] w-full bg-white rounded-[2rem] md:rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-8 md:p-14 space-y-12 border border-gray-100 animate-slide">
           <div className="text-center space-y-4">
              <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">AR</div>
              <h1 className="text-3xl font-black text-gray-900 tracking-tighter">{APP_NAME}</h1>
@@ -376,10 +356,11 @@ const App: React.FC = () => {
         onOpenContent={handleOpenContent}
       />
       
-      <main className={`flex-1 transition-all duration-300 min-h-screen md:ml-72 p-6 md:p-12 relative`}>
+      <main className={`flex-1 transition-all duration-300 min-h-screen md:ml-72 p-4 md:p-12 relative`}>
         <div className="flex items-center justify-between mb-8 md:hidden">
            <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white border rounded-2xl shadow-sm"><Menu size={24} /></button>
-           <h2 className="text-sm font-black text-gray-900 uppercase">{activeWorkspace?.name || 'Dashboard'}</h2>
+           <h2 className="text-xs font-black text-gray-900 uppercase tracking-widest">{activeWorkspace?.name || 'Dashboard'}</h2>
+           <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center text-white font-black text-sm">AR</div>
         </div>
 
         <div className="max-w-6xl mx-auto w-full">
@@ -389,7 +370,7 @@ const App: React.FC = () => {
                primaryColorHex={primaryColorHex} 
                onSaveInsight={saveAnalytics} 
                users={activeWorkspace.members} 
-               addNotification={(n) => {}} // Legacy prop
+               addNotification={(n) => {}} 
                currentUser={user!}
                accounts={accounts}
                setAccounts={setAccounts}
@@ -423,9 +404,9 @@ const App: React.FC = () => {
       </main>
 
       {isJoinWorkspaceModalOpen && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/50 backdrop-blur-sm">
-              <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-slide relative text-gray-900">
-                  <button onClick={() => setIsJoinWorkspaceModalOpen(false)} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full"><ArrowRight size={18}/></button>
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+              <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 md:p-10 shadow-2xl animate-slide relative text-gray-900">
+                  <button onClick={() => setIsJoinWorkspaceModalOpen(false)} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full"><X size={18}/></button>
                   <div className="text-center mb-8"><div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-4"><Hash size={32}/></div><h2 className="text-2xl font-black text-gray-900">Gabung Workspace</h2><p className="text-gray-400 text-sm mt-2">Masukkan Kode Unik Workspace.</p></div>
                   <form onSubmit={handleJoinByCode} className="space-y-4">
                       <input required value={workspaceCodeInput} onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())} className="w-full px-6 py-4 bg-gray-50 border rounded-2xl font-black text-center text-xl uppercase text-gray-900" placeholder="AR-XXXX" />
