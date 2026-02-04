@@ -32,6 +32,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshingComments, setIsRefreshingComments] = useState(false);
   
   // Filters
   const [filterApprovedBy, setFilterApprovedBy] = useState<string>('All');
@@ -102,9 +103,14 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     try {
         const sharedPlans = await databaseService.getContentPlans(dbConfig, workspaceId);
         setItems(sharedPlans);
+        
+        // Also update detail view if open
+        if (detailedViewItem) {
+            const freshItem = sharedPlans.find(i => i.id === detailedViewItem.id);
+            if (freshItem) setDetailedViewItem(freshItem);
+        }
     } catch (e) {
         console.error("Fetch Plan Error", e);
-        // Fallback or Alert? For now, empty or maybe local mock
     } finally {
         setIsLoading(false);
     }
@@ -251,7 +257,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
         setEditingItem(null);
         setFormData({ title: '', platform: 'Instagram', value: 'Awareness', pillar: '', type: 'Reels', description: '', postLink: '', approvedBy: '', pic: '', scriptUrl: '', visualUrl: '', status: 'Menunggu Review', postDate: '' });
     } catch (err: any) {
-        // IMPROVED ERROR MESSAGE
         alert(`Gagal menyimpan: ${err.message}. \n\nPastikan tabel 'content_plans' sudah dibuat di Supabase (Cek Tab DB Monitor di Dev Portal).`);
         console.error(err);
     } finally {
@@ -288,6 +293,18 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
             await databaseService.upsertContentPlan(dbConfig, updatedItem);
             setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
             setDetailedViewItem(updatedItem);
+            
+            // Notification if creator != current user
+            if (detailedViewItem.creatorId && detailedViewItem.creatorId !== currentUser.id) {
+                await databaseService.createNotification(dbConfig, {
+                    recipientId: detailedViewItem.creatorId,
+                    senderName: currentUser.name,
+                    messageText: `Konten "${updatedItem.title}" telah disetujui!`,
+                    targetContentId: updatedItem.id,
+                    type: 'success'
+                });
+            }
+            
             addNotification({
                 senderName: currentUser.name,
                 messageText: `Approved content: "${updatedItem.title}"`,
@@ -335,21 +352,36 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       const updatedItem = { ...targetItem, comments: [...(targetItem.comments || []), newComment] };
 
       try {
+          // 1. Optimistic UI update
           setItems(items.map(i => i.id === itemId ? updatedItem : i));
           if(detailedViewItem?.id === itemId) setDetailedViewItem(updatedItem);
           
+          // 2. Sync to DB
           await databaseService.upsertContentPlan(dbConfig, updatedItem);
 
-          // Notification Logic
+          // 3. Send Notification to Creator (if not self)
           if (targetItem.creatorId && targetItem.creatorId !== currentUser.id) {
+            // Local toast for feedback
             addNotification({
                 senderName: currentUser.name,
-                messageText: `Mengomentari konten Anda: "${targetItem.title}"`,
+                messageText: `Mengomentari konten: "${targetItem.title}"`,
                 targetContentId: targetItem.id, 
                 type: 'info'
             });
+
+            // Send to DB for real-time notification
+            await databaseService.createNotification(dbConfig, {
+                recipientId: targetItem.creatorId,
+                senderName: currentUser.name,
+                messageText: `Komentar baru di "${targetItem.title}": ${commentText.substring(0, 30)}...`,
+                targetContentId: targetItem.id,
+                type: 'info'
+            });
           }
-      } catch (e) { console.error(e); }
+      } catch (e) { 
+          console.error(e);
+          alert("Gagal mengirim komentar. Periksa koneksi.");
+      }
       
       setCommentText('');
       setShowEmojiPicker(false);
@@ -382,6 +414,24 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
   const addEmoji = (emoji: string) => {
       setCommentText(prev => prev + emoji);
+  };
+
+  const refreshComments = async () => {
+      if (!detailedViewItem) return;
+      setIsRefreshingComments(true);
+      const dbConfig = getDbConfig();
+      try {
+          const allPlans = await databaseService.getContentPlans(dbConfig, workspaceId);
+          const currentPlan = allPlans.find(p => p.id === detailedViewItem.id);
+          if (currentPlan) {
+              setDetailedViewItem(currentPlan);
+              setItems(items.map(i => i.id === currentPlan.id ? currentPlan : i));
+          }
+      } catch (e) {
+          console.error("Refresh failed", e);
+      } finally {
+          setIsRefreshingComments(false);
+      }
   };
 
   const filteredItems = items.filter(item => {
@@ -417,7 +467,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Konten Plan</h1>
           <p className="text-gray-400 font-medium flex items-center gap-2">
              Strategi & Manajemen Konten Arunika. 
-             <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1">
+             <span className="text-blue-500 bg-blue-50 px-2 py-0.5 rounded text-[10px] font-black uppercase flex items-center gap-1 cursor-pointer hover:bg-blue-100" onClick={fetchData}>
                 <RefreshCw size={10} className={isLoading ? "animate-spin" : ""} /> {isLoading ? 'Syncing...' : 'Live Synced'}
              </span>
           </p>
@@ -780,7 +830,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                         <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><MessageSquare size={20} /></div>
                         <h3 className="text-lg font-black text-gray-900">Diskusi Tim</h3>
                     </div>
-                    <span className="text-[10px] font-bold text-gray-400">{detailedViewItem.comments?.length || 0} Komentar</span>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-gray-400">{detailedViewItem.comments?.length || 0} Komentar</span>
+                        <button onClick={refreshComments} disabled={isRefreshingComments} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Refresh Comments">
+                            <RefreshCw size={14} className={isRefreshingComments ? "animate-spin" : ""}/>
+                        </button>
+                    </div>
                  </div>
                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 mb-6 pr-2">
                     {detailedViewItem.comments?.length === 0 && <p className="text-center text-xs text-gray-300 italic py-20">Belum ada diskusi untuk konten ini.</p>}

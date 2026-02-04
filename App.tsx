@@ -116,9 +116,8 @@ const App: React.FC = () => {
       localStorage.setItem('sf_workspaces_db', JSON.stringify(workspaces));
   }, [workspaces]);
 
-  // DATA SYNCING LOGIC
+  // DATA SYNCING LOGIC (Workspace & Members)
   useEffect(() => {
-      // If logged in and has workspace, try to fetch fresh workspace data from cloud
       const syncData = async () => {
           if (user && user.workspaceId && authState === 'authenticated') {
               const dbConfig = getDbConfig();
@@ -137,11 +136,7 @@ const App: React.FC = () => {
                               return exists ? prev.map(w => w.id === freshWs.id ? freshWs : w) : [...prev, freshWs];
                           });
                           
-                          // Also update allUsers global state
-                          setAllUsers(prev => {
-                              // Merge remote users with local mock users if needed, or just use remote
-                              return allDbUsers; 
-                          });
+                          setAllUsers(prev => allDbUsers);
                       }
                   } catch (e) {
                       console.error("Sync Error", e);
@@ -151,6 +146,34 @@ const App: React.FC = () => {
       };
       
       syncData();
+  }, [user, authState]);
+
+  // NOTIFICATION POLLING (New Feature)
+  useEffect(() => {
+      if (!user || authState !== 'authenticated') return;
+
+      const fetchNotifications = async () => {
+          const dbConfig = getDbConfig();
+          if (dbConfig.url && dbConfig.key) {
+              const notifs = await databaseService.getNotifications(dbConfig, user.id);
+              
+              // Detect new unread notifications to show popups
+              const newUnread = notifs.filter(n => !n.read);
+              const previousUnreadIds = new Set(notificationHistory.filter(n => !n.read).map(n => n.id));
+              
+              const brandNew = newUnread.find(n => !previousUnreadIds.has(n.id));
+              
+              if (brandNew) {
+                  setTopNotification(brandNew);
+              }
+
+              setNotificationHistory(notifs);
+          }
+      };
+
+      fetchNotifications();
+      const interval = setInterval(fetchNotifications, 15000); // Poll every 15s
+      return () => clearInterval(interval);
   }, [user, authState]);
 
   // Helper: Get Active Workspace based on current user
@@ -179,7 +202,6 @@ const App: React.FC = () => {
     }
 
     try {
-        // Send to Supabase Registrations Table
         await databaseService.createRegistration(dbConfig, {
             ...regData,
             password: regData.password
@@ -228,13 +250,9 @@ const App: React.FC = () => {
       newWs.members = [updatedUser];
 
       try {
-          // 1. Create Workspace in DB
           await databaseService.createWorkspace(dbConfig, newWs);
-          
-          // 2. Update User in DB (Link to Workspace)
           await databaseService.upsertUser(dbConfig, updatedUser);
 
-          // 3. Update Local State
           setWorkspaces([...workspaces, newWs]);
           setUser(updatedUser);
           localStorage.setItem('sf_session_user', JSON.stringify(updatedUser));
@@ -263,7 +281,6 @@ const App: React.FC = () => {
       }
 
       try {
-          // 1. Search Code in DB
           const targetWs = await databaseService.getWorkspaceByCode(dbConfig, code);
 
           if (!targetWs) {
@@ -272,7 +289,6 @@ const App: React.FC = () => {
               return;
           }
 
-          // 2. Check if already member (fetch latest users first to be sure)
           const allDbUsers = await databaseService.getAllUsers(dbConfig);
           const existingMember = allDbUsers.find(u => u.workspaceId === targetWs.id && u.email === user.email);
 
@@ -282,23 +298,19 @@ const App: React.FC = () => {
               return;
           }
 
-          // 3. Create NEW Profile for this Workspace
           const newUserProfile: User = {
               ...user,
-              id: `U-${Date.now()}`, // Create NEW profile ID unique for this workspace
+              id: `U-${Date.now()}`, 
               workspaceId: targetWs.id,
               role: 'viewer',
               jobdesk: 'Member',
-              // Reset some fields
               kpi: [],
               activityLogs: [],
               performanceScore: 0
           };
 
-          // 4. Save New Profile to DB
           await databaseService.upsertUser(dbConfig, newUserProfile);
 
-          // 5. Update Local State & Switch
           const updatedWs = { ...targetWs, members: [...targetWs.members, newUserProfile] };
           setWorkspaces([...workspaces, updatedWs]);
           setAllUsers([...allUsers, newUserProfile]);
@@ -322,7 +334,6 @@ const App: React.FC = () => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPassword = password.trim();
 
-    // Dev Bypass
     if (cleanEmail === DEV_CREDENTIALS.email.toLowerCase() && cleanPassword === DEV_CREDENTIALS.password) {
         const devUser = MOCK_USERS.find(u => u.role === 'developer');
         if (devUser) {
@@ -334,12 +345,10 @@ const App: React.FC = () => {
         return;
     }
 
-    // DB Verification
     const dbConfig = getDbConfig();
     try {
         let loggedInUser: User | null = null;
         
-        // 1. Try Remote First
         if (dbConfig.url && dbConfig.key) {
              const remoteUser = await databaseService.getUserByEmail(dbConfig, cleanEmail);
              if (remoteUser && (remoteUser.password === cleanPassword || cleanPassword === 'Social123')) {
@@ -347,7 +356,6 @@ const App: React.FC = () => {
              }
         }
 
-        // 2. Fallback Local
         if (!loggedInUser) {
             loggedInUser = allUsers.find(u => u.email.toLowerCase() === cleanEmail && (u.password === cleanPassword || cleanPassword === 'Social123')) || null;
         }
@@ -361,11 +369,6 @@ const App: React.FC = () => {
                 setUser(loggedInUser);
                 localStorage.setItem('sf_session_user', JSON.stringify(loggedInUser));
                 setAuthState('authenticated');
-                
-                // If user has a workspace, trigger refresh
-                if (loggedInUser.workspaceId) {
-                    // Logic handled in useEffect
-                }
             }
         } else {
             setLoginError("Email atau password salah.");
@@ -377,7 +380,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Other handlers remain same...
   const saveAnalytics = (insight: PostInsight | PostInsight[]) => {
     const updated = Array.isArray(insight) ? [...insight, ...analyticsData] : [insight, ...analyticsData];
     setAnalyticsData(updated);
@@ -385,6 +387,7 @@ const App: React.FC = () => {
   };
 
   const triggerNotification = (notif: Omit<SystemNotification, 'id' | 'timestamp' | 'read'>) => {
+    // This is now mostly used for local feedback, but the polling will handle real DB notifications
     const newNotif: SystemNotification = {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
@@ -404,8 +407,17 @@ const App: React.FC = () => {
     }
   };
 
-  const markNotificationsRead = () => {
+  const markNotificationsRead = async () => {
     setNotificationHistory(prev => prev.map(n => ({ ...n, read: true })));
+    
+    // Also mark in DB
+    const dbConfig = getDbConfig();
+    if (dbConfig.url && dbConfig.key) {
+        const unreadIds = notificationHistory.filter(n => !n.read).map(n => n.id);
+        for(const id of unreadIds) {
+            await databaseService.markNotificationRead(dbConfig, id);
+        }
+    }
   };
 
   const handleRegistrationAction = async (regId: string, status: 'approved' | 'rejected') => {
@@ -424,9 +436,7 @@ const App: React.FC = () => {
 
   const isDev = user?.role === 'developer';
 
-  // --- RENDER ---
-
-  // 1. REGISTRATION PAGE
+  // --- RENDER --- (Rest of render logic identical)
   if (authState === 'register') {
     return (
       <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
@@ -471,7 +481,7 @@ const App: React.FC = () => {
     );
   }
 
-  // 2. WORKSPACE SETUP (If Logged in but No Workspace ID)
+  // 2. WORKSPACE SETUP
   if (authState === 'authenticated' && user && !user.workspaceId && !isDev) {
       return (
         <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 font-sans">
@@ -615,7 +625,7 @@ const App: React.FC = () => {
     );
   }
 
-  // --- JOIN WORKSPACE MODAL (For Logged In Users who want to join ANOTHER workspace) ---
+  // --- JOIN WORKSPACE MODAL ---
   const JoinWorkspaceModal = () => (
       isJoinWorkspaceModalOpen && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/50 backdrop-blur-sm">
@@ -690,7 +700,7 @@ const App: React.FC = () => {
                accounts={accounts}
                setAccounts={setAccounts}
                targetContentId={targetContentId}
-               workspaceId={activeWorkspace.id} // Added: Shared data access
+               workspaceId={activeWorkspace.id} 
              />
            )}
            {activeTab === 'calendar' && !isDev && activeWorkspace && <Calendar primaryColor={activeWorkspace.color} />}
@@ -716,8 +726,8 @@ const App: React.FC = () => {
                user={user!} 
                primaryColor={activeWorkspace.color} 
                setUser={setUser} 
-               allWorkspaces={workspaces} // Pass all workspaces to lookup names
-               allProfiles={allUsers.filter(u => u.email === user?.email)} // Pass all profiles for this email
+               allWorkspaces={workspaces} 
+               allProfiles={allUsers.filter(u => u.email === user?.email)} 
                onSwitchProfile={switchProfile}
              />
            )}
