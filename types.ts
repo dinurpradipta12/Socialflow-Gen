@@ -101,6 +101,9 @@ export interface Comment {
   timestamp: string;
   attachment?: string; // Base64 string for images/files
   attachmentType?: 'image' | 'file';
+  replyToId?: string;
+  replyToName?: string;
+  replyToText?: string;
 }
 
 export interface ContentPlanItem {
