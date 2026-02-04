@@ -83,6 +83,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       }
   }, [targetContentId, items]);
 
+  useEffect(() => {
+    if (detailedViewItem && commentsEndRef.current) {
+        commentsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [detailedViewItem?.comments]);
+
   const handlePostComment = async (itemId: string) => {
       if ((!commentText.trim() && !attachment) || isSendingComment) return;
       setIsSendingComment(true);
@@ -160,7 +166,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
         if (!isApproved) {
             for (const user of users) {
                 if (user.id !== currentUser.id) {
-                    await databaseService.createNotification(dbConfig, { recipientId: user.id, senderName: currentUser.name, messageText: `${currentUser.name} approved this content: "${updatedItem.title}"`, targetContentId: updatedItem.id, type: 'success' });
+                    await databaseService.createNotification(dbConfig, { recipientId: user.id, senderName: currentUser.name, messageText: `${currentUser.name} menyetujui konten: "${updatedItem.title}"`, targetContentId: updatedItem.id, type: 'success' });
                 }
             }
         }
@@ -208,7 +214,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
         <div className="fixed inset-0 z-[140] flex items-center justify-center p-6">
            <div className="absolute inset-0 bg-slate-900/10 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
            <div className="relative bg-white w-full max-w-2xl rounded-[3rem] shadow-2xl overflow-hidden animate-slide flex flex-col max-h-[90vh]">
-              <div className="p-8 bg-white border-b flex justify-between items-center">
+              <div className="p-8 bg-white border-b flex flex-col items-center">
                  <h2 className="text-2xl font-black text-gray-900">{editingItem ? 'Edit Perencanaan' : 'Perencanaan Baru'}</h2>
               </div>
               <form onSubmit={async (e) => {
@@ -229,8 +235,16 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                     <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">PIC</label><select value={formData.pic} onChange={e => setFormData({...formData, pic: e.target.value})} className="w-full px-5 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-gray-900"><option value="">Pilih PIC</option>{picOptions.map(u => <option key={u} value={u}>{u}</option>)}</select></div>
                  </div>
                  <button type="submit" disabled={isSaving} className="w-full py-5 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-2xl shadow-xl hover:bg-blue-700 flex justify-center gap-2">{isSaving && <Loader2 size={16} className="animate-spin" />} Simpan Plan</button>
+                 
+                 {/* Tombol Tutup Minimalis Bawah */}
                  <div className="flex justify-center pt-2">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-rose-500 transition-colors">Tutup</button>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsModalOpen(false)} 
+                      className="px-6 py-2 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 hover:text-gray-900 transition-colors border border-transparent hover:border-gray-100 rounded-full"
+                    >
+                      Batal
+                    </button>
                  </div>
               </form>
            </div>
@@ -266,7 +280,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                               });
                               setDetailedViewItem(null); 
                               setIsModalOpen(true);
-                          }} className="p-3 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-2xl transition-all"><Edit3 size={18}/></button>
+                          }} className="p-3 bg-gray-50 hover:bg-blue-50 text-gray-400 hover:text-blue-600 rounded-2xl transition-all shadow-sm"><Edit3 size={18}/></button>
                       </div>
                       <h2 className="text-3xl font-black text-gray-900 mt-2 leading-tight">{detailedViewItem.title}</h2>
                       <p className="text-xs font-bold text-gray-400 mt-2 flex items-center gap-2"><Calendar size={14}/> {detailedViewItem.postDate || '-'}</p>
@@ -284,11 +298,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                   </div>
                 </div>
 
-                <div className="w-1/2 p-10 flex flex-col bg-gray-50/30">
+                <div className="w-1/2 p-10 flex flex-col bg-gray-50/30 relative">
                   <div className="mb-6 flex items-center gap-3">
                       <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><MessageSquare size={20} /></div>
                       <h3 className="text-lg font-black text-gray-900">Diskusi Tim</h3>
                   </div>
+                  
                   <div className="flex-1 overflow-y-auto space-y-6 mb-6 pr-2 custom-scrollbar">
                       {detailedViewItem.comments?.map((c) => {
                           const isMe = c.userId === currentUser.id;
@@ -321,9 +336,9 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
                                           {/* Minimalist Popup Menu */}
                                           {showMenu && (
-                                            <div className={`absolute z-20 top-8 ${isMe ? '-left-24' : '-right-24'} bg-white shadow-xl rounded-xl border border-gray-100 p-1 flex flex-col min-w-[100px] animate-slide-down`}>
+                                            <div className={`absolute z-30 top-8 ${isMe ? '-left-24' : '-right-24'} bg-white shadow-xl rounded-xl border border-gray-100 p-1 flex flex-col min-w-[100px] animate-slide-down`}>
                                               <button onClick={() => { setReplyingTo({id: c.id, name: c.userName, text: c.text}); setActiveCommentMenuId(null); }} className="flex items-center gap-2 px-3 py-2 text-[9px] font-black uppercase text-gray-500 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors">
-                                                <Reply size={12}/> Reply
+                                                <Reply size={12}/> Balas
                                               </button>
                                               {isMe && (
                                                 <>
@@ -352,15 +367,16 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                         <div className="flex items-center justify-between px-4 py-2 bg-blue-50 rounded-2xl mb-2 animate-slide">
                           <div className="flex items-center gap-2 overflow-hidden">
                             <Reply size={12} className="text-blue-500"/>
-                            <p className="text-[10px] font-bold text-blue-600 truncate">Reply ke {replyingTo.name}: <span className="font-medium text-blue-400 italic">"{replyingTo.text}"</span></p>
+                            <p className="text-[10px] font-bold text-blue-600 truncate">Balas {replyingTo.name}: <span className="font-medium text-blue-400 italic">"{replyingTo.text}"</span></p>
                           </div>
                           <button onClick={() => setReplyingTo(null)} className="p-1 text-blue-300 hover:text-blue-600"><X size={14}/></button>
                         </div>
                       )}
+                      
                       {/* Edit indicator bar */}
                       {editingCommentId && (
                         <div className="flex items-center justify-between px-4 py-2 bg-amber-50 rounded-2xl mb-2 animate-slide">
-                          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2"><Edit2 size={12}/> Sedang mengedit komentar</p>
+                          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest flex items-center gap-2"><Edit2 size={12}/> Mengedit komentar...</p>
                           <button onClick={() => { setEditingCommentId(null); setCommentText(''); }} className="p-1 text-amber-300 hover:text-amber-600"><X size={14}/></button>
                         </div>
                       )}
@@ -371,8 +387,8 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                             value={commentText} 
                             onChange={(e) => setCommentText(e.target.value)} 
                             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePostComment(detailedViewItem.id)} 
-                            placeholder={replyingTo ? "Balas komentar..." : "Tulis komentar..."} 
-                            className="flex-1 bg-transparent outline-none text-xs font-medium" 
+                            placeholder={replyingTo ? "Balas pesan..." : "Tulis komentar..."} 
+                            className="flex-1 bg-transparent outline-none text-xs font-medium text-gray-900" 
                           />
                           <button onClick={() => handlePostComment(detailedViewItem.id)} disabled={isSendingComment} className="p-3 bg-blue-600 text-white rounded-2xl shadow-md active:scale-95 transition-transform">
                             {isSendingComment ? <Loader2 size={16} className="animate-spin"/> : editingCommentId ? <Check size={16}/> : <Send size={16}/>}
@@ -386,7 +402,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
               <div className="p-4 border-t bg-white flex justify-center items-center shrink-0">
                   <button 
                     onClick={() => setDetailedViewItem(null)} 
-                    className="px-8 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-all border border-transparent hover:border-gray-100"
+                    className="px-10 py-2.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 hover:bg-gray-50 hover:text-gray-900 transition-all border border-transparent hover:border-gray-100"
                   >
                     Tutup Detail
                   </button>

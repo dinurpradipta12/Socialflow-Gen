@@ -181,8 +181,6 @@ const App: React.FC = () => {
         setTargetContentId(contentId);
         setActiveTab('contentPlan');
         setTopNotification(null);
-        // [FIX] Removed setShowNotifHistory(false) as it is not defined in this scope.
-        // The Sidebar manages its own notification history panel state locally.
     }
   };
 
@@ -273,9 +271,9 @@ const App: React.FC = () => {
           ) : (
             <form onSubmit={async (e) => { e.preventDefault(); setLoading(true); try { await databaseService.createRegistration(getDbConfig(), regData); setRegSuccess(true); } catch(e) { alert("Gagal daftar."); } finally { setLoading(false); } }} className="space-y-4">
                 <h1 className="text-3xl font-black text-gray-900 tracking-tighter">Daftar Akun</h1>
-                <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Nama</label><input required value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-200" /></div>
-                <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Email</label><input required type="email" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-200" /></div>
-                <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Password</label><input required type="password" value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-200" /></div>
+                <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Nama</label><input required value={regData.name} onChange={e => setRegData({...regData, name: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-200 text-gray-900" /></div>
+                <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Email</label><input required type="email" value={regData.email} onChange={e => setRegData({...regData, email: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-200 text-gray-900" /></div>
+                <div><label className="text-[10px] font-black uppercase text-gray-400 ml-3">Password</label><input required type="password" value={regData.password} onChange={e => setRegData({...regData, password: e.target.value})} className="w-full px-6 py-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm border focus:border-blue-200 text-gray-900" /></div>
                 <button type="submit" disabled={loading} className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl mt-4 flex justify-center items-center gap-2 shadow-xl shadow-blue-200 active:scale-95 transition-all">
                     {loading ? <Loader2 className="animate-spin"/> : 'Kirim Registrasi'}
                 </button>
@@ -297,7 +295,7 @@ const App: React.FC = () => {
                     <h2 className="text-xl font-black text-gray-900">Gabung Tim</h2>
                     {setupStep === 'join' ? (
                         <form onSubmit={handleJoinByCode} className="w-full space-y-4">
-                            <input value={workspaceCodeInput} onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())} className="w-full px-6 py-4 bg-gray-50 border rounded-2xl text-center font-black text-lg uppercase" placeholder="AR-XXXX" />
+                            <input value={workspaceCodeInput} onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())} className="w-full px-6 py-4 bg-gray-50 border rounded-2xl text-center font-black text-lg uppercase text-gray-900" placeholder="AR-XXXX" />
                             <button type="submit" disabled={loading} className="w-full py-3 bg-blue-600 text-white rounded-xl font-black">{loading ? <Loader2 size={12} className="animate-spin" /> : 'Gabung'}</button>
                         </form>
                     ) : <button onClick={() => setSetupStep('join')} className="px-8 py-3 bg-white border-2 text-gray-900 rounded-2xl font-black uppercase text-[10px]">Input Kode</button>}
@@ -329,11 +327,11 @@ const App: React.FC = () => {
           </div>
           <form onSubmit={handleLogin} className="space-y-6">
             {loginError && <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-center gap-3"><AlertTriangle size={18} className="text-rose-500 shrink-0" /><p className="text-[11px] font-bold text-rose-600">{loginError}</p></div>}
-            <div className="space-y-2"><label className="text-[9px] font-black uppercase text-gray-400 ml-4">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-sm" placeholder="user@arunika.id" /></div>
+            <div className="space-y-2"><label className="text-[9px] font-black uppercase text-gray-400 ml-4">Email</label><input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-sm text-gray-900 placeholder:text-gray-400" placeholder="user@arunika.id" /></div>
             <div className="space-y-2">
                <label className="text-[9px] font-black uppercase text-gray-400 ml-4">Password</label>
                <div className="relative">
-                  <input type={showPassword ? "text" : "password"} required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-sm" placeholder="••••••••" />
+                  <input type={showPassword ? "text" : "password"} required value={password} onChange={e => setPassword(e.target.value)} className="w-full px-7 py-5 bg-gray-50 border rounded-2xl outline-none font-bold text-sm text-gray-900 placeholder:text-gray-400" placeholder="••••••••" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button>
                </div>
             </div>
@@ -424,11 +422,11 @@ const App: React.FC = () => {
 
       {isJoinWorkspaceModalOpen && (
           <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-slate-900/50 backdrop-blur-sm">
-              <div className="bg-white w-full max-md rounded-[3rem] p-10 shadow-2xl animate-slide relative">
+              <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-slide relative text-gray-900">
                   <button onClick={() => setIsJoinWorkspaceModalOpen(false)} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full"><ArrowRight size={18}/></button>
                   <div className="text-center mb-8"><div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-4"><Hash size={32}/></div><h2 className="text-2xl font-black text-gray-900">Gabung Workspace</h2><p className="text-gray-400 text-sm mt-2">Masukkan Kode Unik Workspace.</p></div>
                   <form onSubmit={handleJoinByCode} className="space-y-4">
-                      <input required value={workspaceCodeInput} onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())} className="w-full px-6 py-4 bg-gray-50 border rounded-2xl font-black text-center text-xl uppercase" placeholder="AR-XXXX" />
+                      <input required value={workspaceCodeInput} onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())} className="w-full px-6 py-4 bg-gray-50 border rounded-2xl font-black text-center text-xl uppercase text-gray-900" placeholder="AR-XXXX" />
                       <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl">{loading ? <Loader2 size={12} className="animate-spin" /> : 'Gabung Sekarang'}</button>
                   </form>
               </div>
