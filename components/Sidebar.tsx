@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  LayoutDashboard, Calendar, Megaphone, BarChart3, Link2, Users, Settings, LogOut, FileSpreadsheet, Database, Clock as ClockIcon, Bell
+  LayoutDashboard, Calendar, Megaphone, BarChart3, Link2, Users, Settings, LogOut, FileSpreadsheet, Database, Clock as ClockIcon, Bell, X
 } from 'lucide-react';
 import { User, SystemNotification } from '../types';
 import { APP_NAME } from '../constants';
@@ -14,6 +14,7 @@ interface SidebarProps {
   user: User;
   appLogo?: string | null;
   isOpen?: boolean;
+  setIsOpen?: (open: boolean) => void;
   unreadNotifications?: number;
   notifications?: SystemNotification[];
   onMarkRead?: () => void;
@@ -21,7 +22,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
-  activeTab, setActiveTab, onLogout, user, appLogo, isOpen = false,
+  activeTab, setActiveTab, onLogout, user, appLogo, isOpen = false, setIsOpen,
   unreadNotifications = 0, notifications = [], onMarkRead, onOpenContent
 }) => {
   const [time, setTime] = useState(new Date());
@@ -51,12 +52,23 @@ const Sidebar: React.FC<SidebarProps> = ({
   const handleNotificationClick = (n: SystemNotification) => {
       if (n.targetContentId && onOpenContent) {
           onOpenContent(n.targetContentId);
+          if (setIsOpen) setIsOpen(false);
       }
   };
 
   return (
     <div className={`fixed inset-y-0 left-0 w-72 bg-white border-r border-gray-100 flex flex-col z-[100] transition-transform duration-300 ease-in-out transform ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} shadow-2xl md:shadow-none`}>
       <div className="p-6 flex flex-col h-full relative">
+        
+        {/* Mobile Close Button */}
+        <button 
+          onClick={() => setIsOpen && setIsOpen(false)} 
+          className="md:hidden absolute top-6 right-6 p-2 bg-gray-50 text-gray-400 hover:text-rose-500 rounded-xl transition-all z-[120]"
+          title="Tutup Menu"
+        >
+          <X size={20} />
+        </button>
+
         {/* Notification Overlay Panel */}
         {showNotifHistory && (
           <div className="absolute left-72 top-6 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-4 z-[110] animate-slide overflow-hidden max-h-[80vh] flex flex-col">
@@ -82,7 +94,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         {/* Logo Section */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 pr-8 md:pr-0">
           <div className="flex items-center gap-3">
             {appLogo ? (
                 <img src={appLogo} alt="Logo" className="w-10 h-10 rounded-xl object-contain bg-white shadow-sm" />

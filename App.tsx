@@ -180,6 +180,7 @@ const App: React.FC = () => {
     if (contentId) {
         setTargetContentId(contentId);
         setActiveTab('contentPlan');
+        setIsSidebarOpen(false); // Auto-close on link navigation
         setTopNotification(null);
     }
   };
@@ -259,7 +260,7 @@ const App: React.FC = () => {
   // --- RENDER LOGIC ---
   if (authState === 'register') {
     return (
-      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans text-gray-900">
         <div className="max-w-[480px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-8 border border-gray-100 animate-slide">
           <button onClick={() => setAuthState('login')} className="flex items-center gap-2 text-gray-400 hover:text-gray-900 text-xs font-black uppercase tracking-widest transition-colors"><ChevronLeft size={16} /> Back to Login</button>
           {regSuccess ? (
@@ -287,7 +288,7 @@ const App: React.FC = () => {
   // Auto-skip setup if user already has a workspace
   if (authState === 'authenticated' && user && !user.workspaceId && user.role !== 'developer') {
       return (
-        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 font-sans">
+        <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6 font-sans text-gray-900">
             <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 animate-slide">
                 <div className="md:col-span-2 text-center mb-4"><h1 className="text-3xl font-black text-gray-900 tracking-tight">Setup Workspace</h1><p className="text-gray-400 mt-2">Pilih cara memulai tim Anda.</p></div>
                 <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-xl flex flex-col items-center text-center space-y-6 hover:border-blue-200 transition-all">
@@ -318,7 +319,7 @@ const App: React.FC = () => {
 
   if (authState === 'login') {
     return (
-      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[#FDFDFD] flex items-center justify-center p-4 font-sans text-gray-900">
         <div className="max-w-[440px] w-full bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.1)] p-10 md:p-14 space-y-12 border border-gray-100 animate-slide">
           <div className="text-center space-y-4">
              <div className="w-16 h-16 rounded-3xl mx-auto flex items-center justify-center text-white text-2xl font-black bg-blue-500 shadow-xl shadow-blue-200">AR</div>
@@ -344,7 +345,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex font-sans overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#F8FAFC] flex font-sans overflow-x-hidden relative text-gray-900">
       {topNotification && (
         <TopNotification 
           key={topNotification.id}
@@ -358,12 +359,13 @@ const App: React.FC = () => {
 
       <Sidebar 
         activeTab={activeTab} 
-        setActiveTab={(t) => { setActiveTab(t); setTargetContentId(null); }} 
+        setActiveTab={(t) => { setActiveTab(t); setTargetContentId(null); setIsSidebarOpen(false); }} 
         primaryColorHex={primaryColorHex} 
         onLogout={() => { setUser(null); localStorage.removeItem('sf_session_user'); setAuthState('login'); }} 
         user={user!} 
         appLogo={customLogo}
         isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
         unreadNotifications={notificationHistory.filter(n => !n.read).length}
         notifications={notificationHistory}
         onMarkRead={async () => {
