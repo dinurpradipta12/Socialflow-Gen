@@ -148,7 +148,7 @@ const App: React.FC = () => {
       syncData();
   }, [user, authState]);
 
-  // NOTIFICATION POLLING (New Feature)
+  // NOTIFICATION POLLING (Enhanced for Realtime Background Updates)
   useEffect(() => {
       if (!user || authState !== 'authenticated') return;
 
@@ -161,10 +161,17 @@ const App: React.FC = () => {
               const newUnread = notifs.filter(n => !n.read);
               const previousUnreadIds = new Set(notificationHistory.filter(n => !n.read).map(n => n.id));
               
+              // Find the newest notification that wasn't there before
               const brandNew = newUnread.find(n => !previousUnreadIds.has(n.id));
               
               if (brandNew) {
                   setTopNotification(brandNew);
+                  // Play subtle sound (optional, browser policy might block)
+                  try {
+                      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                      audio.volume = 0.5;
+                      audio.play().catch(() => {});
+                  } catch(e) {}
               }
 
               setNotificationHistory(notifs);
@@ -172,9 +179,10 @@ const App: React.FC = () => {
       };
 
       fetchNotifications();
-      const interval = setInterval(fetchNotifications, 15000); // Poll every 15s
+      // Polling set to 3 seconds for "Realtime" feel as requested
+      const interval = setInterval(fetchNotifications, 3000); 
       return () => clearInterval(interval);
-  }, [user, authState]);
+  }, [user, authState, notificationHistory.length]); // Dependency on length helps trigger but main loop handles it
 
   // Helper: Get Active Workspace based on current user
   const activeWorkspace = workspaces.find(w => w.id === user?.workspaceId);

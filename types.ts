@@ -107,7 +107,7 @@ export interface ContentPlanItem {
   id: string;
   workspaceId?: string; // NEW: For data sharing
   creatorId?: string; 
-  status: 'Menunggu Review' | 'Drafting' | 'Dijadwalkan' | 'Diposting' | 'Revisi' | 'Reschedule' | 'Dibatalkan';
+  status: 'Menunggu Review' | 'Sedang di Review' | 'Approved' | 'Drafting' | 'Dijadwalkan' | 'Diposting' | 'Revisi' | 'Reschedule' | 'Dibatalkan';
   platform: 'Instagram' | 'TikTok' | 'YouTube'; 
   pic?: string; 
   value: string;

@@ -4,7 +4,7 @@ import { ContentPlanItem, PostInsight, User, Comment, SystemNotification, Social
 import { MOCK_CONTENT_PLANS, SUPABASE_CONFIG } from '../constants';
 import { scrapePostInsights } from '../services/geminiService';
 import { databaseService } from '../services/databaseService';
-import { Plus, ChevronDown, FileText, Link as LinkIcon, ExternalLink, X, Save, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send, Edit, Trash2, Calendar, Smile, CheckCircle, Upload, MoreHorizontal, Settings, ChevronRight, Edit3, PlayCircle, RefreshCw, Paperclip, Image as ImageIconLucide } from 'lucide-react';
+import { Plus, ChevronDown, FileText, Link as LinkIcon, ExternalLink, X, Save, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send, Edit, Trash2, Calendar, Smile, CheckCircle, Upload, MoreHorizontal, Settings, ChevronRight, Edit3, PlayCircle, RefreshCw, Paperclip, Image as ImageIconLucide, Eye, Undo2 } from 'lucide-react';
 
 interface ContentPlanProps {
   primaryColorHex: string;
@@ -18,7 +18,7 @@ interface ContentPlanProps {
   workspaceId: string; // NEW PROP: Essential for shared data
 }
 
-const DEFAULT_STATUS_OPTIONS = ['Menunggu Review', 'Drafting', 'Dijadwalkan', 'Diposting', 'Revisi', 'Reschedule', 'Dibatalkan'];
+const DEFAULT_STATUS_OPTIONS = ['Menunggu Review', 'Sedang di Review', 'Approved', 'Drafting', 'Dijadwalkan', 'Diposting', 'Revisi', 'Reschedule', 'Dibatalkan'];
 // Expanded Emoji List
 const EMOJIS = ['👍', '🔥', '❤️', '😂', '😮', '😢', '👏', '🎉', '✅', '❌', '🚀', '💯', '🤔', '👀', '✨', '🙌', '🙏', '💪', '🤝', '💡', '⚠️', '🚩', '🆗', '🆒'];
 
@@ -28,11 +28,15 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
   const [detailedViewItem, setDetailedViewItem] = useState<ContentPlanItem | null>(null);
   const processedTargetId = useRef<string | null>(null); 
+  const commentsEndRef = useRef<HTMLDivElement>(null); 
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // File Preview State
+  const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
   
   // Filters
   const [filterApprovedBy, setFilterApprovedBy] = useState<string>('All');
@@ -111,8 +115,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
         if (detailedViewItem) {
             const freshItem = sharedPlans.find(i => i.id === detailedViewItem.id);
             if (freshItem) {
-                // Only update if there are changes to avoid jitter, but for simplicity we set it
-                // Ideally deep compare here
+                // Update detail view but prevent flickering if data is same
                 if(JSON.stringify(freshItem) !== JSON.stringify(detailedViewItem)) {
                     setDetailedViewItem(freshItem);
                 }
@@ -141,15 +144,39 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       return () => {
           if(interval) clearInterval(interval);
       };
-  }, [detailedViewItem?.id, workspaceId]); // Depend on ID so it resets when item changes
+  }, [detailedViewItem?.id, workspaceId]); 
+
+  // INSTANT SCROLL ON OPEN
+  useEffect(() => {
+      if (detailedViewItem?.id && commentsEndRef.current) {
+          // Instant scroll to bottom when modal opens
+          commentsEndRef.current.scrollIntoView({ behavior: "auto" });
+      }
+  }, [detailedViewItem?.id]);
+
+  // SMOOTH SCROLL ON NEW COMMENT
+  useEffect(() => {
+      if (detailedViewItem?.comments?.length && commentsEndRef.current) {
+          commentsEndRef.current.scrollIntoView({ behavior: "smooth" });
+      }
+  }, [detailedViewItem?.comments?.length]);
+
+  // AUTO UPDATE STATUS TO "Sedang di Review"
+  useEffect(() => {
+      if (detailedViewItem && detailedViewItem.status === 'Menunggu Review' && currentUser.id !== detailedViewItem.creatorId) {
+          // If a viewer (presumably approver/reviewer) opens it and it's still waiting, move to Reviewing
+          updateItemStatus(detailedViewItem.id, 'Sedang di Review');
+      }
+  }, [detailedViewItem?.id]); // Run only when a new item is opened
 
   // Effect to handle Deep Linking from Notification
   useEffect(() => {
+      // IMPORTANT: processedTargetId prevents re-opening the modal repeatedly for the same ID
       if (targetContentId && targetContentId !== processedTargetId.current && items.length > 0) {
           const item = items.find(i => i.id === targetContentId);
           if (item) {
               setDetailedViewItem(item);
-              processedTargetId.current = targetContentId; 
+              processedTargetId.current = targetContentId; // Mark as processed
               if (item.accountId && item.accountId !== activeAccount) {
                   setActiveAccount(item.accountId);
               }
@@ -163,6 +190,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       if (e.key === 'Escape') {
         setIsModalOpen(false);
         setDetailedViewItem(null);
+        setPreviewAttachment(null);
         setIsAccountModalOpen(false);
         setIsManageStatusOpen(false);
         setIsManagePicOpen(false);
@@ -303,21 +331,44 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
       } catch (e) { console.error(e); }
   };
 
-  const handleApproveContent = async () => {
-      if (detailedViewItem) {
-          const dbConfig = getDbConfig();
-          const updatedItem: ContentPlanItem = { 
-            ...detailedViewItem, 
-            approvedBy: currentUser.name,
-            status: detailedViewItem.status === 'Menunggu Review' ? 'Drafting' : detailedViewItem.status
-          };
+  // CHANGE DATE HANDLER
+  const updateItemDate = async (itemId: string, newDate: string) => {
+      const dbConfig = getDbConfig();
+      const targetItem = items.find(i => i.id === itemId);
+      if(!targetItem) return;
 
-          try {
-            await databaseService.upsertContentPlan(dbConfig, updatedItem);
-            setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
-            setDetailedViewItem(updatedItem);
-            
-            // Notification if creator != current user
+      const updatedItem = { ...targetItem, postDate: newDate };
+      
+      try {
+          setItems(items.map(i => i.id === itemId ? updatedItem : i));
+          if (detailedViewItem && detailedViewItem.id === itemId) setDetailedViewItem(updatedItem);
+          await databaseService.upsertContentPlan(dbConfig, updatedItem);
+      } catch (e) { console.error(e); }
+  };
+
+  // APPROVE TOGGLE HANDLER
+  const handleToggleApprove = async () => {
+      if (!detailedViewItem) return;
+      const dbConfig = getDbConfig();
+      
+      const isCurrentlyApproved = detailedViewItem.status === 'Approved';
+      const newStatus = isCurrentlyApproved ? 'Menunggu Review' : 'Approved';
+      const newApprovedBy = isCurrentlyApproved ? '' : currentUser.name;
+
+      const updatedItem: ContentPlanItem = { 
+        ...detailedViewItem, 
+        approvedBy: newApprovedBy,
+        status: newStatus as any
+      };
+
+      try {
+        await databaseService.upsertContentPlan(dbConfig, updatedItem);
+        setItems(items.map(i => i.id === updatedItem.id ? updatedItem : i));
+        setDetailedViewItem(updatedItem);
+        
+        // NOTIFICATIONS LOGIC
+        if (!isCurrentlyApproved) {
+            // 1. Notify Creator (if not self)
             if (detailedViewItem.creatorId && detailedViewItem.creatorId !== currentUser.id) {
                 await databaseService.createNotification(dbConfig, {
                     recipientId: detailedViewItem.creatorId,
@@ -327,15 +378,30 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                     type: 'success'
                 });
             }
+
+            // 2. Notify PIC (if PIC exists and is not self)
+            if (detailedViewItem.pic) {
+                const picUser = users.find(u => u.name === detailedViewItem.pic);
+                if (picUser && picUser.id !== currentUser.id && picUser.id !== detailedViewItem.creatorId) {
+                    await databaseService.createNotification(dbConfig, {
+                        recipientId: picUser.id,
+                        senderName: currentUser.name,
+                        messageText: `Konten "${updatedItem.title}" dimana Anda sebagai PIC telah disetujui!`,
+                        targetContentId: updatedItem.id,
+                        type: 'success'
+                    });
+                }
+            }
             
+            // Local Notification
             addNotification({
                 senderName: currentUser.name,
                 messageText: `Approved content: "${updatedItem.title}"`,
                 type: 'success',
                 targetContentId: updatedItem.id
             });
-          } catch (e) { alert("Gagal approve"); }
-      }
+        }
+      } catch (e) { alert("Gagal update status approval"); }
   };
 
   const handleAnalyzeLink = async (e: React.MouseEvent, item: ContentPlanItem) => {
@@ -400,21 +466,21 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           await databaseService.upsertContentPlan(dbConfig, updatedItem);
 
           // 3. BROADCAST NOTIFICATION TO INVOLVED USERS
-          // Create a Set of all involved users (Creator + Commenters)
           const involvedUserIds = new Set<string>();
           
-          // Add creator
-          if (targetItem.creatorId) involvedUserIds.add(targetItem.creatorId);
+          // ALWAYS add Creator (unless self)
+          if (targetItem.creatorId && targetItem.creatorId !== currentUser.id) {
+              involvedUserIds.add(targetItem.creatorId);
+          }
           
-          // Add anyone who has commented
+          // Add other commenters (excluding self and creator to avoid doubles)
           targetItem.comments?.forEach(c => {
-              if (c.userId) involvedUserIds.add(c.userId);
+              if (c.userId !== currentUser.id && c.userId !== targetItem.creatorId) {
+                  involvedUserIds.add(c.userId);
+              }
           });
 
-          // Remove self from notification list
-          involvedUserIds.delete(currentUser.id);
-
-          // Send notification to each involved user
+          // Send
           for (const recipientId of involvedUserIds) {
               await databaseService.createNotification(dbConfig, {
                   recipientId: recipientId,
@@ -493,6 +559,20 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
   return (
     <div className="space-y-8 animate-slide relative pb-20">
+      
+      {/* ATTACHMENT PREVIEW MODAL */}
+      {previewAttachment && (
+          <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-slide p-4">
+              <button onClick={() => setPreviewAttachment(null)} className="fixed top-6 right-6 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-[260]"><X size={24}/></button>
+              <div className="relative max-w-5xl max-h-screen w-full flex flex-col items-center justify-center">
+                  <img src={previewAttachment} alt="Preview" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+                  <a href={previewAttachment} download="attachment" className="mt-6 px-6 py-3 bg-white text-gray-900 rounded-full font-bold text-xs uppercase tracking-widest hover:bg-gray-100 transition-all flex items-center gap-2">
+                      <ExternalLink size={14}/> Download Original
+                  </a>
+              </div>
+          </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Konten Plan</h1>
@@ -748,7 +828,16 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                     </div>
 
                     <h2 className="text-3xl font-black text-gray-900 mt-2 leading-tight">{detailedViewItem.title}</h2>
-                    {detailedViewItem.postDate && <p className="text-xs font-bold text-gray-400 mt-3 flex items-center gap-2"><Calendar size={14} className="text-blue-500"/> {new Date(detailedViewItem.postDate).toLocaleDateString('id-ID', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'})}</p>}
+                    {/* EDITABLE DATE FIELD */}
+                    <div className="mt-3 flex items-center gap-2">
+                        <Calendar size={14} className="text-blue-500"/>
+                        <input 
+                            type="date" 
+                            value={detailedViewItem.postDate || ''}
+                            onChange={(e) => updateItemDate(detailedViewItem.id, e.target.value)}
+                            className="text-xs font-bold text-gray-500 bg-transparent border-none outline-none cursor-pointer hover:text-blue-500 transition-colors"
+                        />
+                    </div>
                  </div>
 
                  {/* Post Link Section */}
@@ -800,10 +889,12 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                             <div>
                                 <p className="text-[9px] text-gray-300 uppercase tracking-widest mb-1">Current Status</p>
                                 <div className="flex items-center gap-2">
-                                    {detailedViewItem.approvedBy ? (
+                                    {detailedViewItem.status === 'Approved' ? (
                                         <span className="text-xs font-bold text-emerald-600 flex items-center gap-1"><CheckCircle size={12}/> Approved</span>
+                                    ) : detailedViewItem.status === 'Sedang di Review' ? (
+                                        <span className="text-xs font-bold text-blue-500 flex items-center gap-1"><Eye size={12}/> Reviewing</span>
                                     ) : (
-                                        <span className="text-xs font-bold text-amber-500 flex items-center gap-1"><Clock size={12}/> Waiting Review</span>
+                                        <span className="text-xs font-bold text-amber-500 flex items-center gap-1"><Clock size={12}/> Waiting</span>
                                     )}
                                 </div>
                             </div>
@@ -831,16 +922,18 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                  <div className="flex gap-3 pt-6 mt-auto">
                     {/* Approve Button */}
                     <button 
-                        onClick={handleApproveContent}
-                        disabled={!!detailedViewItem.approvedBy}
+                        onClick={handleToggleApprove}
                         className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                            detailedViewItem.approvedBy 
-                            ? 'bg-emerald-100 text-emerald-600 cursor-not-allowed shadow-none border border-emerald-200' 
+                            detailedViewItem.status === 'Approved' 
+                            ? 'bg-red-50 text-red-500 hover:bg-red-100 border border-red-200' 
                             : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-200'
                         }`}
                     >
-                        <CheckCircle size={16} /> 
-                        {detailedViewItem.approvedBy ? 'Approved' : 'Approve Content'}
+                        {detailedViewItem.status === 'Approved' ? (
+                            <><Undo2 size={16} /> Batal Approve</>
+                        ) : (
+                            <><CheckCircle size={16} /> Approve Content</>
+                        )}
                     </button>
 
                     <button 
@@ -875,24 +968,38 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                     {detailedViewItem.comments?.length === 0 && <p className="text-center text-xs text-gray-300 italic py-20">Belum ada diskusi untuk konten ini.</p>}
                     {detailedViewItem.comments?.map((c) => {
                         const isMe = c.userId === currentUser.id;
+                        const commentUser = users.find(u => u.id === c.userId);
                         return (
-                            <div key={c.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-slide`}>
-                                <div className={`p-4 rounded-2xl max-w-[85%] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white border border-gray-100 text-gray-700 rounded-bl-sm'}`}>
-                                    {!isMe && <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-500">{c.userName}</p>}
-                                    {c.attachment && c.attachmentType === 'image' && (
-                                        <img src={c.attachment} alt="Attachment" className="w-full h-auto rounded-xl mb-2 object-cover max-h-48 border border-white/20" />
-                                    )}
-                                    {c.attachment && c.attachmentType === 'file' && (
-                                        <div className="flex items-center gap-2 p-2 bg-black/5 rounded-lg mb-2">
-                                            <FileText size={16} /> <span className="text-xs font-bold">File Attachment</span>
-                                        </div>
-                                    )}
-                                    <p className="text-xs font-medium leading-relaxed">{c.text}</p>
+                            <div key={c.id} className={`flex gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end animate-slide`}>
+                                <img 
+                                    src={commentUser?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.userName}`} 
+                                    className="w-8 h-8 rounded-full border border-gray-200 shadow-sm bg-white"
+                                    alt={c.userName}
+                                />
+                                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                                    <div className={`p-4 rounded-2xl shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white border border-gray-100 text-gray-700 rounded-bl-sm'}`}>
+                                        {!isMe && <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-500">{c.userName}</p>}
+                                        {c.attachment && c.attachmentType === 'image' && (
+                                            <img 
+                                                src={c.attachment} 
+                                                alt="Attachment" 
+                                                onClick={() => setPreviewAttachment(c.attachment!)}
+                                                className="w-full h-auto rounded-xl mb-2 object-cover max-h-48 border border-white/20 cursor-pointer hover:opacity-90 transition-opacity" 
+                                            />
+                                        )}
+                                        {c.attachment && c.attachmentType === 'file' && (
+                                            <div className="flex items-center gap-2 p-2 bg-black/5 rounded-lg mb-2">
+                                                <FileText size={16} /> <span className="text-xs font-bold">File Attachment</span>
+                                            </div>
+                                        )}
+                                        <p className="text-xs font-medium leading-relaxed">{c.text}</p>
+                                    </div>
+                                    <p className="text-[9px] text-gray-300 mt-1 font-bold">{new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                                 </div>
-                                <p className="text-[9px] text-gray-300 mt-1 font-bold">{new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                             </div>
                         );
                     })}
+                    <div ref={commentsEndRef} />
                  </div>
                  <div className="relative bg-white p-2 rounded-3xl border border-gray-100 shadow-lg">
                     {showEmojiPicker && (

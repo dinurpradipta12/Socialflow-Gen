@@ -1,6 +1,6 @@
 
-import React, { useEffect } from 'react';
-import { MessageSquare, X, Bell } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { MessageSquare, X, Bell, CheckCircle2 } from 'lucide-react';
 import { ThemeColor } from '../types';
 import { THEME_COLORS } from '../constants';
 
@@ -21,41 +21,56 @@ const TopNotification: React.FC<TopNotificationProps> = ({
   onClick,
   actionButton
 }) => {
-  const colorSet = THEME_COLORS[primaryColor];
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(onClose, 4000); // 4 seconds auto-hide
-    return () => clearTimeout(timer);
+    // Small delay to trigger animation
+    const timerIn = setTimeout(() => setVisible(true), 50);
+    const timerOut = setTimeout(() => {
+        setVisible(false);
+        setTimeout(onClose, 500); // Wait for exit animation
+    }, 5000); 
+
+    return () => {
+        clearTimeout(timerIn);
+        clearTimeout(timerOut);
+    };
   }, [onClose]);
 
   return (
-    <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[250] w-full max-w-sm animate-slide-down px-4">
+    <div className="fixed top-4 left-0 right-0 flex justify-center z-[250] pointer-events-none">
       <div 
         onClick={onClick}
-        className="bg-white/95 backdrop-blur-xl border border-gray-100 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.1)] rounded-[2rem] p-5 flex flex-col gap-4 cursor-pointer hover:bg-white transition-all ring-1 ring-black/5"
+        className={`pointer-events-auto cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] ${
+            visible ? 'translate-y-0 opacity-100 scale-100' : '-translate-y-12 opacity-0 scale-95'
+        }`}
       >
-        <div className="flex items-center gap-4">
-          <div className={`w-12 h-12 rounded-[1.25rem] ${colorSet.bg} flex items-center justify-center text-white shrink-0 shadow-lg`}>
-            <Bell size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Alert</p>
-            <p className="text-sm font-black text-gray-900 truncate">{senderName}</p>
-            <p className="text-xs text-gray-500 truncate font-medium">{messageText}</p>
-          </div>
-          <button 
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
-            className="p-2 text-gray-300 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <X size={18} />
-          </button>
+        <div className="bg-black/90 backdrop-blur-3xl text-white px-5 py-4 rounded-[2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] flex items-center gap-4 min-w-[340px] max-w-[480px] border border-white/10 ring-1 ring-black/5">
+            {/* Icon Container */}
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0 backdrop-blur-md">
+                <Bell size={18} className="text-white" />
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0 pr-2">
+                <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">New Notification</p>
+                    <span className="text-[9px] text-gray-500 font-medium">Just now</span>
+                </div>
+                <div className="flex flex-col mt-1">
+                    <p className="text-xs font-black text-white truncate leading-tight">{senderName}</p>
+                    <p className="text-[11px] text-gray-300 truncate font-medium leading-tight opacity-90">{messageText}</p>
+                </div>
+            </div>
+
+            {/* Close Button */}
+            <button 
+                onClick={(e) => { e.stopPropagation(); setVisible(false); setTimeout(onClose, 300); }}
+                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-gray-400 hover:text-white transition-colors"
+            >
+                <X size={14} />
+            </button>
         </div>
-        
-        {actionButton && (
-          <div className="flex justify-end gap-2 border-t border-gray-50 pt-3 mt-1">
-             {actionButton}
-          </div>
-        )}
       </div>
     </div>
   );
