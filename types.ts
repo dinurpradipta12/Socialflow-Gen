@@ -99,6 +99,8 @@ export interface Comment {
   userName: string;
   text: string;
   timestamp: string;
+  attachment?: string; // Base64 string for images/files
+  attachmentType?: 'image' | 'file';
 }
 
 export interface ContentPlanItem {

@@ -4,7 +4,7 @@ import { ContentPlanItem, PostInsight, User, Comment, SystemNotification, Social
 import { MOCK_CONTENT_PLANS, SUPABASE_CONFIG } from '../constants';
 import { scrapePostInsights } from '../services/geminiService';
 import { databaseService } from '../services/databaseService';
-import { Plus, ChevronDown, FileText, Link as LinkIcon, ExternalLink, X, Save, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send, Edit, Trash2, Calendar, Smile, CheckCircle, Upload, MoreHorizontal, Settings, ChevronRight, Edit3, PlayCircle, RefreshCw } from 'lucide-react';
+import { Plus, ChevronDown, FileText, Link as LinkIcon, ExternalLink, X, Save, Check, Instagram, Video, BarChart2, Loader2, Edit2, ImageIcon, UserPlus, Filter, Clock, MessageSquare, Send, Edit, Trash2, Calendar, Smile, CheckCircle, Upload, MoreHorizontal, Settings, ChevronRight, Edit3, PlayCircle, RefreshCw, Paperclip, Image as ImageIconLucide } from 'lucide-react';
 
 interface ContentPlanProps {
   primaryColorHex: string;
@@ -19,7 +19,8 @@ interface ContentPlanProps {
 }
 
 const DEFAULT_STATUS_OPTIONS = ['Menunggu Review', 'Drafting', 'Dijadwalkan', 'Diposting', 'Revisi', 'Reschedule', 'Dibatalkan'];
-const EMOJIS = ['👍', '🔥', '❤️', '😂', '😮', '😢', '👏', '🎉', '✅', '❌'];
+// Expanded Emoji List
+const EMOJIS = ['👍', '🔥', '❤️', '😂', '😮', '😢', '👏', '🎉', '✅', '❌', '🚀', '💯', '🤔', '👀', '✨', '🙌', '🙏', '💪', '🤝', '💡', '⚠️', '🚩', '🆗', '🆒'];
 
 const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsight, users, addNotification, currentUser, accounts, setAccounts, targetContentId, workspaceId }) => {
   const [items, setItems] = useState<ContentPlanItem[]>([]);
@@ -32,7 +33,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   const [editingItem, setEditingItem] = useState<ContentPlanItem | null>(null);
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isRefreshingComments, setIsRefreshingComments] = useState(false);
   
   // Filters
   const [filterApprovedBy, setFilterApprovedBy] = useState<string>('All');
@@ -68,6 +68,8 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   // Comment & Interaction State
   const [commentText, setCommentText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [attachment, setAttachment] = useState<{data: string, type: 'image' | 'file'} | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Link Edit State in Detail View
   const [isEditingLink, setIsEditingLink] = useState(false);
@@ -98,16 +100,23 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
   // FETCH DATA ON MOUNT
   const fetchData = async () => {
-    setIsLoading(true);
+    // Only set loading on initial fetch
+    if(items.length === 0) setIsLoading(true);
     const dbConfig = getDbConfig();
     try {
         const sharedPlans = await databaseService.getContentPlans(dbConfig, workspaceId);
         setItems(sharedPlans);
         
-        // Also update detail view if open
+        // If detail view is open, refresh its data specifically
         if (detailedViewItem) {
             const freshItem = sharedPlans.find(i => i.id === detailedViewItem.id);
-            if (freshItem) setDetailedViewItem(freshItem);
+            if (freshItem) {
+                // Only update if there are changes to avoid jitter, but for simplicity we set it
+                // Ideally deep compare here
+                if(JSON.stringify(freshItem) !== JSON.stringify(detailedViewItem)) {
+                    setDetailedViewItem(freshItem);
+                }
+            }
         }
     } catch (e) {
         console.error("Fetch Plan Error", e);
@@ -119,6 +128,20 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
   useEffect(() => {
     fetchData();
   }, [workspaceId]);
+
+  // REAL-TIME POLLING FOR DETAIL VIEW (1 Second Interval)
+  useEffect(() => {
+      let interval: any;
+      if (detailedViewItem) {
+          // Poll every 1 second when detail view is open to catch comments and approvals
+          interval = setInterval(() => {
+              fetchData();
+          }, 1000); 
+      }
+      return () => {
+          if(interval) clearInterval(interval);
+      };
+  }, [detailedViewItem?.id, workspaceId]); // Depend on ID so it resets when item changes
 
   // Effect to handle Deep Linking from Notification
   useEffect(() => {
@@ -334,8 +357,23 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              // Store as base64
+              setAttachment({ 
+                  data: reader.result as string, 
+                  type: file.type.startsWith('image/') ? 'image' : 'file' 
+              });
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
   const handlePostComment = async (itemId: string) => {
-      if (!commentText.trim()) return;
+      if (!commentText.trim() && !attachment) return;
       const dbConfig = getDbConfig();
       
       const newComment: Comment = {
@@ -343,7 +381,9 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           userId: currentUser.id,
           userName: currentUser.name,
           text: commentText,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          attachment: attachment?.data,
+          attachmentType: attachment?.type
       };
       
       const targetItem = items.find(i => i.id === itemId);
@@ -359,31 +399,39 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
           // 2. Sync to DB
           await databaseService.upsertContentPlan(dbConfig, updatedItem);
 
-          // 3. Send Notification to Creator (if not self)
-          if (targetItem.creatorId && targetItem.creatorId !== currentUser.id) {
-            // Local toast for feedback
-            addNotification({
-                senderName: currentUser.name,
-                messageText: `Mengomentari konten: "${targetItem.title}"`,
-                targetContentId: targetItem.id, 
-                type: 'info'
-            });
+          // 3. BROADCAST NOTIFICATION TO INVOLVED USERS
+          // Create a Set of all involved users (Creator + Commenters)
+          const involvedUserIds = new Set<string>();
+          
+          // Add creator
+          if (targetItem.creatorId) involvedUserIds.add(targetItem.creatorId);
+          
+          // Add anyone who has commented
+          targetItem.comments?.forEach(c => {
+              if (c.userId) involvedUserIds.add(c.userId);
+          });
 
-            // Send to DB for real-time notification
-            await databaseService.createNotification(dbConfig, {
-                recipientId: targetItem.creatorId,
-                senderName: currentUser.name,
-                messageText: `Komentar baru di "${targetItem.title}": ${commentText.substring(0, 30)}...`,
-                targetContentId: targetItem.id,
-                type: 'info'
-            });
+          // Remove self from notification list
+          involvedUserIds.delete(currentUser.id);
+
+          // Send notification to each involved user
+          for (const recipientId of involvedUserIds) {
+              await databaseService.createNotification(dbConfig, {
+                  recipientId: recipientId,
+                  senderName: currentUser.name,
+                  messageText: `Komentar baru di "${targetItem.title}": ${commentText.substring(0, 30)}...`,
+                  targetContentId: targetItem.id,
+                  type: 'info'
+              });
           }
+
       } catch (e) { 
           console.error(e);
           alert("Gagal mengirim komentar. Periksa koneksi.");
       }
       
       setCommentText('');
+      setAttachment(null);
       setShowEmojiPicker(false);
   };
 
@@ -414,24 +462,7 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
 
   const addEmoji = (emoji: string) => {
       setCommentText(prev => prev + emoji);
-  };
-
-  const refreshComments = async () => {
-      if (!detailedViewItem) return;
-      setIsRefreshingComments(true);
-      const dbConfig = getDbConfig();
-      try {
-          const allPlans = await databaseService.getContentPlans(dbConfig, workspaceId);
-          const currentPlan = allPlans.find(p => p.id === detailedViewItem.id);
-          if (currentPlan) {
-              setDetailedViewItem(currentPlan);
-              setItems(items.map(i => i.id === currentPlan.id ? currentPlan : i));
-          }
-      } catch (e) {
-          console.error("Refresh failed", e);
-      } finally {
-          setIsRefreshingComments(false);
-      }
+      setShowEmojiPicker(false); // Close automatically after selection
   };
 
   const filteredItems = items.filter(item => {
@@ -824,7 +855,13 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
               </div>
 
               {/* Right Column: Discussion */}
-              <div className="w-1/2 p-10 flex flex-col bg-gray-50/30">
+              <div className="w-1/2 p-10 flex flex-col bg-gray-50/30 relative">
+                 {/* Live Indicator */}
+                 <div className="absolute top-4 right-4 flex items-center gap-2">
+                     <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+                     <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Realtime Chat</span>
+                 </div>
+
                  <div className="mb-6 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><MessageSquare size={20} /></div>
@@ -832,9 +869,6 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                     </div>
                     <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-gray-400">{detailedViewItem.comments?.length || 0} Komentar</span>
-                        <button onClick={refreshComments} disabled={isRefreshingComments} className="p-2 text-blue-500 hover:bg-blue-50 rounded-xl transition-all" title="Refresh Comments">
-                            <RefreshCw size={14} className={isRefreshingComments ? "animate-spin" : ""}/>
-                        </button>
                     </div>
                  </div>
                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 mb-6 pr-2">
@@ -845,6 +879,14 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                             <div key={c.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-slide`}>
                                 <div className={`p-4 rounded-2xl max-w-[85%] shadow-sm ${isMe ? 'bg-blue-600 text-white rounded-br-sm' : 'bg-white border border-gray-100 text-gray-700 rounded-bl-sm'}`}>
                                     {!isMe && <p className="text-[9px] font-black uppercase tracking-widest mb-1 opacity-60 text-blue-500">{c.userName}</p>}
+                                    {c.attachment && c.attachmentType === 'image' && (
+                                        <img src={c.attachment} alt="Attachment" className="w-full h-auto rounded-xl mb-2 object-cover max-h-48 border border-white/20" />
+                                    )}
+                                    {c.attachment && c.attachmentType === 'file' && (
+                                        <div className="flex items-center gap-2 p-2 bg-black/5 rounded-lg mb-2">
+                                            <FileText size={16} /> <span className="text-xs font-bold">File Attachment</span>
+                                        </div>
+                                    )}
                                     <p className="text-xs font-medium leading-relaxed">{c.text}</p>
                                 </div>
                                 <p className="text-[9px] text-gray-300 mt-1 font-bold">{new Date(c.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
@@ -854,14 +896,39 @@ const ContentPlan: React.FC<ContentPlanProps> = ({ primaryColorHex, onSaveInsigh
                  </div>
                  <div className="relative bg-white p-2 rounded-3xl border border-gray-100 shadow-lg">
                     {showEmojiPicker && (
-                        <div className="absolute bottom-20 left-0 bg-white shadow-2xl border border-gray-100 rounded-2xl p-3 grid grid-cols-5 gap-2 z-20 w-64 animate-slide">
+                        <div className="absolute bottom-20 left-0 bg-white shadow-2xl border border-gray-100 rounded-2xl p-3 grid grid-cols-6 gap-2 z-20 w-80 animate-slide">
                             {EMOJIS.map(em => (
-                                <button key={em} onClick={() => addEmoji(em)} className="text-xl hover:bg-gray-50 p-2 rounded-lg transition-colors">{em}</button>
+                                <button key={em} onClick={() => addEmoji(em)} className="text-2xl hover:bg-gray-50 p-2 rounded-lg transition-colors">{em}</button>
                             ))}
                         </div>
                     )}
+                    
+                    {/* Attachment Preview */}
+                    {attachment && (
+                        <div className="absolute -top-16 left-4 bg-gray-900 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-3 shadow-lg">
+                            {attachment.type === 'image' ? <ImageIconLucide size={16}/> : <FileText size={16}/>}
+                            <span>File attached</span>
+                            <button onClick={() => setAttachment(null)} className="p-1 hover:bg-white/20 rounded-full"><X size={12}/></button>
+                        </div>
+                    )}
+
                     <div className="flex gap-2 items-center">
                         <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-2xl transition-colors"><Smile size={20}/></button>
+                        
+                        {/* File Upload Trigger */}
+                        <div className="relative">
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                className="hidden" 
+                                onChange={handleFileSelect} 
+                                accept="image/*,.pdf,.doc"
+                            />
+                            <button onClick={() => fileInputRef.current?.click()} className="p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-2xl transition-colors">
+                                <Paperclip size={20}/>
+                            </button>
+                        </div>
+
                         <input 
                             value={commentText} 
                             onChange={(e) => setCommentText(e.target.value)}
