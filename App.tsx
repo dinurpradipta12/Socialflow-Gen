@@ -74,6 +74,18 @@ const App: React.FC = () => {
     key: localStorage.getItem('sf_db_key') || SUPABASE_CONFIG.key
   });
 
+  // ESCAPE KEY SUPPORT FOR GLOBAL MODALS
+  useEffect(() => {
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsJoinWorkspaceModalOpen(false);
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, []);
+
   useEffect(() => {
     if (customLogo) localStorage.setItem('sf_custom_logo', customLogo);
     else localStorage.removeItem('sf_custom_logo');
@@ -403,15 +415,17 @@ const App: React.FC = () => {
         {activeWorkspace && <ChatPopup primaryColor={activeWorkspace.color} currentUser={user!} messages={[]} onSendMessage={()=>{}} isOpen={false} setIsOpen={()=>{}} unreadCount={0} />}
       </main>
 
+      {/* JOIN WORKSPACE MODAL (CENTERED DESKTOP, CRYSTAL BACKDROP) */}
       {isJoinWorkspaceModalOpen && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-              <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 md:p-10 shadow-2xl animate-slide relative text-gray-900">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-white/30 backdrop-blur-md">
+              <div className="bg-white w-full max-w-md max-h-[85vh] rounded-[2.5rem] p-8 md:p-10 shadow-2xl animate-slide relative text-gray-900 border border-gray-100 overflow-y-auto custom-scrollbar">
                   <button onClick={() => setIsJoinWorkspaceModalOpen(false)} className="absolute top-6 right-6 p-2 bg-gray-50 rounded-full"><X size={18}/></button>
                   <div className="text-center mb-8"><div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-4"><Hash size={32}/></div><h2 className="text-2xl font-black text-gray-900">Gabung Workspace</h2><p className="text-gray-400 text-sm mt-2">Masukkan Kode Unik Workspace.</p></div>
                   <form onSubmit={handleJoinByCode} className="space-y-4">
                       <input required value={workspaceCodeInput} onChange={e => setWorkspaceCodeInput(e.target.value.toUpperCase())} className="w-full px-6 py-4 bg-gray-50 border rounded-2xl font-black text-center text-xl uppercase text-gray-900" placeholder="AR-XXXX" />
-                      <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl">{loading ? <Loader2 size={12} className="animate-spin" /> : 'Gabung Sekarang'}</button>
+                      <button type="submit" disabled={loading} className="w-full py-4 bg-blue-600 text-white font-black uppercase rounded-2xl shadow-xl shadow-blue-500/10 transition-all">{loading ? <Loader2 size={12} className="animate-spin" /> : 'Gabung Sekarang'}</button>
                   </form>
+                  <p className="text-center text-[9px] font-black text-gray-300 uppercase tracking-widest mt-6">Tekan Esc untuk menutup</p>
               </div>
           </div>
       )}
